@@ -1,0 +1,1488 @@
+:root {
+  --bg: #fdfcf8;
+  --fg: #1f1f1f;
+  --muted: #6b6b6b;
+  --bar-bg: rgba(253, 252, 248, 0.94);
+  --border: #dedad0;
+  --control-bg: #ffffff;
+  --accent: #3c5a8a;
+
+  /* reader.js が上書きする読書用の値 */
+  --font-size: 18px;
+  --line-height: 1.9;
+  --measure: 36em;
+  --font-weight: 400;
+  --font-family: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif CJK JP", serif;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] {
+    --bg: #17181a;
+    --fg: #d9d6cf;
+    --muted: #8d8a84;
+    --bar-bg: rgba(23, 24, 26, 0.94);
+    --border: #33353a;
+    --control-bg: #222327;
+    --accent: #8fb0e0;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="sepia"] {
+  --bg: #f4ecd8;
+  --fg: #3b3024;
+  --muted: #7a6a55;
+  --bar-bg: rgba(244, 236, 216, 0.94);
+  --border: #d8cbaa;
+  --control-bg: #fbf5e6;
+  --accent: #7a4f1d;
+}
+
+:root[data-theme="dark"] {
+  --bg: #17181a;
+  --fg: #d9d6cf;
+  --muted: #8d8a84;
+  --bar-bg: rgba(23, 24, 26, 0.94);
+  --border: #33353a;
+  --control-bg: #222327;
+  --accent: #8fb0e0;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+}
+
+/* ---- ツールバー ---- */
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bar-bg);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+  font-size: 14px;
+}
+
+.toolbar-row,
+.settings {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 8px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+/* 設定パネル：役割ごとのグループに分け、グループ間は広く、グループ内は詰めて並べる */
+.settings {
+  border-top: 1px solid var(--border);
+  align-items: flex-start;
+  gap: 14px 40px;
+  padding-top: 12px;
+  padding-bottom: 14px;
+}
+
+.settings[hidden] {
+  display: none;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-heading {
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: normal;
+  letter-spacing: 0.08em;
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* グループ内でラベルの幅をそろえ、操作部品の左端を縦に合わせる。
+   幅はそのグループのいちばん長いラベルに合わせて、ラベルと部品を離しすぎない */
+.setting-label {
+  flex: none;
+  width: 2.5em;
+}
+
+.setting-label.wide {
+  width: 5em;
+}
+
+.setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* －／値／＋をひとつの部品に見せる */
+.stepper {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  overflow: hidden;
+}
+
+.stepper button {
+  min-width: 34px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 4px 8px;
+}
+
+.stepper button:hover {
+  background: var(--bar-bg);
+}
+
+.stepper button:focus-visible {
+  outline-offset: -2px;
+}
+
+.stepper output {
+  min-width: 4em;
+  padding: 0 4px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 目立たせない操作（設定の初期化など） */
+.text-button {
+  min-height: 28px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.text-button:hover {
+  color: var(--fg);
+}
+
+@media (max-width: 480px) {
+  .settings {
+    gap: 14px 24px;
+  }
+}
+
+/* 開いている作品名。押すと作品一覧が開く */
+.work-controls {
+  display: flex;
+  flex: 1 1 16rem;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.work-controls > #toc-open {
+  flex: none;
+}
+
+.work-change {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.search-help {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.works-controls .search-help {
+  flex-basis: 100%;
+}
+
+#works-order[hidden],
+#works-show-all[hidden] {
+  display: none;
+}
+
+.shelf-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.shelf-item > .work-item,
+.shelf-item > .home-work {
+  flex: 1;
+  min-width: 0;
+}
+
+.shelf-remove {
+  flex: none;
+  margin-right: 12px;
+}
+
+.shelf-item-home {
+  align-items: stretch;
+}
+
+.work-button {
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.work-button-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-button::after {
+  content: '▾';
+  color: var(--muted);
+}
+
+.progress {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 3em;
+  text-align: right;
+}
+
+button,
+select,
+.file-button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--control-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.file-button {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 青空文庫の公式サイトへのリンク */
+.site-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 2px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.site-link[hidden] {
+  display: none;
+}
+
+.site-link:hover {
+  text-decoration: underline;
+}
+
+.site-link::after {
+  content: '↗';
+  margin-left: 2px;
+  font-size: 0.85em;
+}
+
+button:focus-visible,
+select:focus-visible,
+.site-link:focus-visible,
+.file-button:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* ---- ドラッグ＆ドロップ ---- */
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.35);
+  /* 子要素の出入りで dragleave が乱発しないよう、ポインターは受けない */
+  pointer-events: none;
+}
+
+.drop-overlay[hidden] {
+  display: none;
+}
+
+.drop-message {
+  padding: 32px 48px;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  text-align: center;
+  font-size: 18px;
+}
+
+.drop-message p {
+  margin: 0;
+}
+
+.drop-message .drop-note {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---- 目次（ポップアップ） ---- */
+
+/* 目次・作品一覧に共通のポップアップ */
+.popup {
+  width: min(28rem, calc(100vw - 32px));
+  max-height: min(36rem, calc(100dvh - 32px));
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-size: 15px;
+  overflow: hidden;
+}
+
+.popup[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.popup::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.popup-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+/* ---- 作品一覧 ---- */
+
+.works {
+  width: min(36rem, calc(100vw - 32px));
+  height: min(44rem, calc(100dvh - 32px));
+  max-height: none;
+}
+
+.works-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.works-controls input[type="search"] {
+  flex: 1 1 14rem;
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.works-controls input[type="search"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 人気順／著者別の切り替え */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.segmented label {
+  padding: 6px 12px;
+  background: var(--control-bg);
+  cursor: pointer;
+}
+
+.segmented label + label {
+  border-left: 1px solid var(--border);
+}
+
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented label:has(input:checked) {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.segmented label:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.works-list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 6px;
+}
+
+.works-section {
+  position: sticky;
+  top: 0;
+  margin: 0;
+  padding: 8px 16px 4px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: normal;
+}
+
+.work-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  line-height: 1.5;
+}
+
+.work-item:hover {
+  background: var(--control-bg);
+}
+
+.work-item:focus-visible {
+  outline-offset: -2px;
+}
+
+.work-item[aria-current] {
+  color: var(--accent);
+  font-weight: bolder;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.work-rank {
+  flex: none;
+  min-width: 2em;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.work-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-family);
+}
+
+.work-author {
+  flex: none;
+  max-width: 45%;
+  color: var(--muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 青空文庫の全作品からの結果 */
+.works-hint {
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.catalog-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.catalog-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.5;
+}
+
+.catalog-text .work-author {
+  max-width: none;
+  white-space: normal;
+}
+
+.catalog-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.catalog-actions a {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.catalog-missing {
+  margin: 0;
+  color: var(--muted);
+}
+
+.works-more {
+  display: block;
+  margin: 8px auto 4px;
+}
+
+.works-empty {
+  margin: 0;
+  padding: 24px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.works-note {
+  margin: 0;
+  padding: 8px 16px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.works-note a {
+  color: var(--accent);
+}
+
+/* ---- 目次 ---- */
+
+.toc-list {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.toc-item {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-family);
+  text-align: left;
+  line-height: 1.5;
+}
+
+.toc-item:hover {
+  background: var(--control-bg);
+}
+
+.toc-item:focus-visible {
+  outline-offset: -2px;
+}
+
+.toc-item[aria-current] {
+  color: var(--accent);
+  font-weight: bolder;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* 見出しの大きさに応じて字下げする */
+.toc-level-中 {
+  padding-left: calc(16px + 1em);
+}
+
+.toc-level-小 {
+  padding-left: calc(16px + 2em);
+}
+
+/* ---- サイト名（ホームへ戻る） ---- */
+
+.brand {
+  flex: none;
+  color: var(--fg);
+  font-family: var(--font-family);
+  font-weight: bolder;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--accent);
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- ホーム（はじめに） ---- */
+
+.home {
+  max-width: 44rem;
+  margin: 0 auto;
+  font-size: 15px;
+  line-height: 1.85;
+}
+
+.home a {
+  color: var(--accent);
+}
+
+.home h2 {
+  margin: 0 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-family);
+  font-size: 18px;
+  font-weight: bolder;
+}
+
+.home-hero {
+  padding: 1.5rem 0 2.5rem;
+}
+
+.home-kicker {
+  margin: 0;
+  color: var(--accent);
+  font-size: 14px;
+  letter-spacing: 0.12em;
+}
+
+.home-title {
+  margin: 0.2em 0 0.6em;
+  font-family: var(--font-family);
+  font-size: clamp(28px, 5vw, 40px);
+  font-weight: bolder;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+}
+
+.home-lead {
+  margin: 0 0 1.5em;
+  font-family: var(--font-family);
+  font-size: 17px;
+  line-height: 2;
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.home-actions button,
+.home-actions .file-button {
+  min-height: 44px;
+  padding: 8px 20px;
+  font-size: 15px;
+}
+
+.home-actions .primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.home-actions .primary:hover {
+  filter: brightness(1.08);
+}
+
+/* ホームの「青空文庫の全作品から探す」 */
+.home-search {
+  margin-top: 1.6em;
+}
+
+.home-search label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.home-search-row {
+  display: flex;
+  gap: 8px;
+  max-width: 32rem;
+}
+
+.home-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 15px;
+}
+
+.home-search input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.home-search button {
+  min-height: 44px;
+  padding: 6px 20px;
+  font-size: 15px;
+}
+
+.home-notice {
+  margin: 1.2em 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--control-bg);
+  font-size: 14px;
+}
+
+.home-section {
+  margin-bottom: 2.5rem;
+}
+
+.home-note {
+  margin: -4px 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* 続きから読む */
+.resume-list {
+  display: grid;
+  gap: 8px;
+}
+
+.resume-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 16px;
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.resume-card:hover {
+  border-color: var(--accent);
+}
+
+.resume-title {
+  font-family: var(--font-family);
+  font-size: 18px;
+  font-weight: bolder;
+}
+
+.resume-meta {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.resume-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.resume-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* 作品の並び（人気の作品・本棚） */
+.home-works {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 8px;
+}
+
+.home-work {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  text-align: left;
+  line-height: 1.5;
+}
+
+.home-work:hover {
+  border-color: var(--accent);
+}
+
+.home-work-title {
+  font-family: var(--font-family);
+  font-size: 16px;
+}
+
+.home-work-author {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.home-more {
+  margin: 10px 0 0;
+  text-align: right;
+}
+
+.home-more .text-button {
+  font-size: 14px;
+}
+
+/* 使い方 */
+.home-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.home-steps li {
+  position: relative;
+  padding: 0 0 1.2em 2.6em;
+  counter-increment: step;
+}
+
+.home-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0.1em;
+  width: 1.8em;
+  height: 1.8em;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1.7em;
+  text-align: center;
+}
+
+.home-steps h3 {
+  margin: 0 0 2px;
+  font-size: 16px;
+}
+
+.home-steps p {
+  margin: 0;
+}
+
+/* 関連アプリ */
+.home-apps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 12px;
+}
+
+.home .home-app {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--control-bg);
+  color: var(--fg);
+  line-height: 1.6;
+  text-decoration: none;
+}
+
+.home .home-app:hover {
+  border-color: var(--accent);
+}
+
+.home .home-app:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.home-app-platform {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.home-app-name {
+  font-family: var(--font-family);
+  font-size: 17px;
+  font-weight: bolder;
+}
+
+.home-app-desc {
+  flex: 1;
+  font-size: 14px;
+}
+
+.home-app-store {
+  margin-top: 4px;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.home-app-store::after {
+  content: ' ↗';
+}
+
+/* このサイトについて */
+.home-facts {
+  display: grid;
+  grid-template-columns: 7.5em 1fr;
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.home-facts dt {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.home-facts dd {
+  margin: 0;
+}
+
+.home-footer {
+  padding: 1.5rem 0 0;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 560px) {
+  .home-facts {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .home-facts dd {
+    margin-bottom: 10px;
+  }
+
+  .home-lead {
+    font-size: 16px;
+  }
+}
+
+/* ---- 本文 ---- */
+
+main {
+  padding: 2.5rem 16px 6rem;
+}
+
+.text {
+  max-width: var(--measure);
+  margin: 0 auto;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  font-weight: var(--font-weight);
+  line-height: var(--line-height);
+  font-feature-settings: "palt" 0;
+  line-break: strict;
+  overflow-wrap: anywhere;
+  hanging-punctuation: allow-end;
+}
+
+.text p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* ルビは親文字の上に絶対配置し、本文の字間を広げない（Android 版と同じ）。
+   左右の位置は aozora.js の layoutRuby() が隣のルビとの重なりを避けて決める */
+/* 親文字は高さ 1em の箱にして、ルビを字面のすぐ上に置く。
+   上マージンはルビの分の行の確保で、行間が十分なら行は広がらない（狭いときだけ広がる） */
+.text ruby {
+  position: relative;
+  display: inline-block;
+  margin-top: 0.35em;
+  line-height: 1;
+  white-space: nowrap;
+  text-indent: 0;
+}
+
+.text rt {
+  position: absolute;
+  bottom: calc(100% + 0.1em);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.5em;
+  line-height: 1;
+  white-space: nowrap;
+  text-indent: 0;
+  text-align: left;
+}
+
+/* 《》は見せずに残し、コピーしたときに「漢字《かんじ》」の形になるようにする */
+.text .rp {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+:root[data-ruby="off"] .text rt,
+:root[data-ruby="off"] .text .rp {
+  display: none;
+}
+
+:root[data-ruby="off"] .text ruby {
+  margin-top: 0;
+}
+
+.text .gaiji {
+  color: var(--muted);
+  cursor: help;
+}
+
+/* ---- 青空文庫注記（Android 版 applyAozoraStyleRanges に対応） ---- */
+
+.text .az-bold,
+.text .az-midashi {
+  font-weight: bolder;
+}
+
+.text .az-italic {
+  font-style: italic;
+}
+
+.text .az-underline {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.text .az-dot {
+  -webkit-text-emphasis: filled sesame;
+  text-emphasis: filled sesame;
+  -webkit-text-emphasis-position: over right;
+  text-emphasis-position: over right;
+}
+
+.text .az-sup,
+.text .az-sub,
+.text .az-note {
+  font-size: 0.7em;
+  line-height: 1;
+}
+
+.text .az-sup,
+.text .az-note {
+  vertical-align: super;
+}
+
+.text .az-sub {
+  vertical-align: sub;
+}
+
+.text .az-wari {
+  font-size: 0.78em;
+}
+
+.text .az-box {
+  border: 1px solid currentColor;
+  padding: 0 0.1em;
+}
+
+.text .az-caption {
+  font-size: 0.9em;
+  font-style: italic;
+}
+
+/* 窓見出し：Android 版と同じく本文 2 行分を占め、その上下中央に置く */
+.text .az-mado {
+  float: left;
+  display: flex;
+  align-items: center;
+  /* ちょうど 2 行分だと丸め誤差で 3 行目まで回り込むので 1px 低くする */
+  height: calc(var(--line-height) * 2em - 1px);
+  margin-right: 1em;
+  font-weight: bolder;
+  text-indent: 0;
+}
+
+.text .az-boxblock {
+  --box-padding: 0.8em;
+  max-width: 100%;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding: 0.3em var(--box-padding);
+  border: 1px solid currentColor;
+}
+
+/* 改ページ：スクロール表示なので区切りの余白にする */
+.text .page-break {
+  height: calc(var(--line-height) * 2em);
+  clear: both;
+}
+
+/* 空行は 1 行分の余白として残す */
+.text p.blank {
+  height: calc(var(--line-height) * 1em);
+}
+
+.text .status {
+  color: var(--muted);
+  font-family: system-ui, sans-serif;
+  font-size: 15px;
+  text-align: center;
+}
+
+.text .status.error {
+  color: #b3261e;
+}
+
+@media (max-width: 480px) {
+  main {
+    padding-top: 1.5rem;
+  }
+}
+
+/* キーボード操作と短い読み上げ通知 */
+:focus-visible { outline: 3px solid #267ac6; outline-offset: 3px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#storage-warning { position: sticky; top: var(--toolbar-height, 60px); z-index: 10; padding: 1em; background: #fff2c7; color: #382b00; }
+.home-actions { flex-wrap: wrap; }
+@media (max-width: 600px) { .toolbar-row { flex-wrap: wrap; } .work-controls { min-width: 0; max-width: 100%; } }
+
+/* ---- スマホ・タブレット ---- */
+
+/* 表示設定の「その他」（ファイルを開く・作品情報・青空文庫）は、幅の狭い画面でだけ出す */
+.settings-group.narrow-only {
+  display: none;
+}
+
+/* 読書位置のバー（幅の狭い画面で、ツールバー下端に出す） */
+.toolbar::after {
+  content: '';
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: var(--progress, 0%);
+  height: 2px;
+  background: var(--accent);
+}
+
+/* 読み進めると隠れるツールバー（reader.js の autoHideToolbar） */
+.toolbar {
+  transition: transform 0.2s ease;
+}
+
+.toolbar.toolbar-hidden {
+  transform: translateY(-100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar {
+    transition: none;
+  }
+}
+
+/* iPhone の画面の切り欠きやホームバーに重ならないようにする（viewport-fit=cover と組み合わせる） */
+.toolbar-row,
+.settings {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+
+main {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+}
+
+/* 外字の説明などの短いお知らせ */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 30;
+  max-width: min(32rem, calc(100vw - 32px));
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 14px;
+  line-height: 1.6;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  transform: translateX(-50%);
+}
+
+.toast[hidden] {
+  display: none;
+}
+
+/* 幅の狭い画面：ツールバーを 1 段にまとめ、表示設定は画面の半分ほどに収める */
+@media (max-width: 600px) {
+  .wide-only {
+    display: none !important;
+  }
+
+  .settings-group.narrow-only {
+    display: flex;
+  }
+
+  .toolbar-row {
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  /* サイト名はアイコンだけにする（読み上げ用の名前は aria-label にある） */
+  .brand {
+    width: 32px;
+    height: 32px;
+    background: url('favicon.svg') center / 28px no-repeat;
+  }
+
+  .brand-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .work-controls {
+    flex: 1 1 auto;
+  }
+
+  .work-change {
+    display: none;
+  }
+
+  #settings-toggle,
+  #toc-open {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .toolbar::after {
+    display: block;
+  }
+
+  .settings {
+    max-height: min(55dvh, 30rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* タッチ操作の端末（スマホ・タブレット）：指で押しやすい大きさにする */
+@media (pointer: coarse) {
+  button,
+  select,
+  .file-button,
+  .work-item,
+  .toc-item {
+    min-height: 44px;
+  }
+
+  .site-link {
+    min-height: 44px;
+    padding: 4px 6px;
+  }
+
+  .stepper button {
+    min-width: 44px;
+  }
+
+  .brand {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .text-button {
+    min-height: 44px;
+  }
+
+  .catalog-actions a {
+    display: inline-block;
+    padding: 6px 0;
+  }
+
+  /* 16px 未満の入力欄は、iPhone で入力しようとすると画面が勝手に拡大される。
+     個別に文字の大きさを指定している欄（検索欄など）にも効くよう、強めに指定する */
+  input:not([type="radio"]):not([type="checkbox"]),
+  select,
+  textarea,
+  .works-controls input[type="search"],
+  .home-search input {
+    font-size: 16px;
+  }
+}
+
+/* 全作品の検索結果で「zip をダウンロード」を押した後に出す、続けて開くための案内 */
+.catalog-item {
+  flex-wrap: wrap;
+}
+
+.catalog-next {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--control-bg);
+}
+
+.catalog-next .catalog-hint {
+  flex: 1 1 14rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.catalog-next .file-button {
+  flex: none;
+}
+
+/* タッチ操作の端末では、タップの後にホバーの色が残らないよう元に戻し、
+   代わりに押している間（:active）だけ色を付ける */
+@media (hover: none) {
+  .stepper button:hover,
+  .work-item:hover,
+  .toc-item:hover {
+    background: transparent;
+  }
+
+  .text-button:hover {
+    color: var(--muted);
+  }
+
+  .site-link:hover {
+    text-decoration: none;
+  }
+
+  .brand:hover {
+    color: var(--fg);
+  }
+
+  .home-actions .primary:hover {
+    filter: none;
+  }
+
+  .resume-card:hover,
+  .home-work:hover,
+  .home .home-app:hover {
+    border-color: var(--border);
+  }
+
+  .stepper button:active,
+  .work-item:active,
+  .toc-item:active {
+    background: var(--control-bg);
+  }
+
+  .resume-card:active,
+  .home-work:active,
+  .home .home-app:active {
+    border-color: var(--accent);
+  }
+}
+
+/* タップしたときに出る色付きの四角を目立たなくする（押している間の色は上の :active で出す） */
+a,
+button,
+label,
+select,
+summary {
+  -webkit-tap-highlight-color: rgba(60, 90, 138, 0.12);
+}

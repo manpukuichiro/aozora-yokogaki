@@ -1,0 +1,68 @@
+# GitHub Pages への公開。
+# tools/build_site.py（テストの実行・権利フラグとハッシュの検証・公開ファイルの収集）が成功したときだけ、
+# 生成した _site/ を公開する。リポジトリ全体（dev/・tools/ など）は公開しない。
+#
+# 事前に、リポジトリの Settings → Pages → Build and deployment の Source を「GitHub Actions」にしておく。
+#
+# 非公開（private）リポジトリのあいだは、テストとビルドだけを行い、公開の手順は飛ばす
+# （無料プランでは非公開リポジトリから Pages を公開できず、公開の手順が毎回失敗するため）。
+# リポジトリを公開（public）にすると、次の push から自動で Pages に公開する。
+
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # pull request ではテストとビルドだけを行い、公開はしない
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 公開は 1 つずつ。実行中の公開は途中で止めない
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # テスト（node --test と照合テスト）に失敗すると build_site.py が止まり、以降は実行されない
+      - name: テストと公開ファイルの生成
+        run: python tools/build_site.py --out _site
+
+      - uses: actions/configure-pages@v6
+        if: github.event_name != 'pull_request' && !github.event.repository.private
+
+      - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request' && !github.event.repository.private
+        with:
+          path: _site
+          # build_site.py の manifest.json と同じ構成にするため .nojekyll も含める
+          include-hidden-files: true
+
+  deploy:
+    if: github.event_name != 'pull_request' && !github.event.repository.private
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

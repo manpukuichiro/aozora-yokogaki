@@ -1,0 +1,14 @@
+# OS・エディタが作るファイル
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+
+# Python
+__pycache__/
+
+# dev/make_test_zips.py が作るテスト用 zip
+dev/zips/
+
+_site*/
+dev/safety-*.png

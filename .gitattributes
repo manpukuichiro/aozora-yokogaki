@@ -1,0 +1,4 @@
+# 青空文庫のテキストは公式の zip から取り出したまま（Shift_JIS・CRLF）収録する。
+# Windows の core.autocrlf で改行が変換されないよう、テキストとして扱わない
+texts/*.txt -text
+dev/fixtures/sample-sjis.txt -text
