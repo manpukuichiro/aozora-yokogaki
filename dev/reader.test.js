@@ -29,6 +29,29 @@ test('全目録と本棚・収録作品は同じAND条件を使う', async () =>
   assert.equal(api.matches({ title: '猫', author: '漱石' }, api.terms('猫漱石')), false);
 });
 
+test('全目録の検索は人気順と50音順を選べる', async () => {
+  const api = catalog(async () => ({ ok: true, json: async () => JSON.parse(source('data/catalog.json')) }));
+  await api.load();
+  const popular = api.search('漱石');
+  const ranks = [...popular.map((work) => work.rank).filter(Boolean)];
+  assert.ok(ranks.length > 1);
+  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b));
+  assert.ok(popular.slice(0, ranks.length).every((work) => work.rank)); // 順位のある作品が先
+  const kana = api.search('漱石', { order: 'kana' });
+  assert.equal(kana.length, popular.length);
+  const yomi = [...kana.map((work) => work.titleYomi)];
+  assert.deepEqual(yomi, [...yomi].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+});
+
+test('検索語がないうちは目録を読み込まない', () => {
+  let requests = 0;
+  const api = catalog(async () => { requests++; throw Error('読み込まない'); });
+  const app = reader(api);
+  app.api.renderWorksList();
+  assert.equal(requests, 0);
+  assert.equal(api.isLoaded(), false);
+});
+
 class Element {
   constructor() { this.children = []; this.events = {}; this.style = { setProperty() {} }; this.dataset = {}; this.value = ''; }
   addEventListener(name, fn) { this.events[name] = fn; }
@@ -68,7 +91,8 @@ function reader(api, extra = {}) {
   });
   // 起動時のI/Oだけを省き、画面のイベントハンドラを含めた本体を実行する。
   vm.runInContext(source('reader.js').replace('  init();', `
-    globalThis.api = { catalogNodes, renderWorksList, selectWork, importFiles, openText, renderHome,
+    globalThis.api = { catalogNodes, renderWorksList, selectWork, importFiles, openText, renderHome, openWorks,
+      authorShortcuts: [...AUTHOR_SHORTCUTS],
       seedWorks: (works, shelf = []) => { siteWorks = works; books = shelf; },
       seed: (key, items) => { currentKey = key; paragraphs = items; },
       state: () => ({ catalogPending, catalogFailed }) };
@@ -105,6 +129,60 @@ test('目録の失敗は再描画・入力・並び替えで再試行せず、�
   assert.ok(app.element('works-list').children.some((node) => node.className === 'catalog-item'));
 });
 
+// 作品一覧に出ている目録の作品の著者名（絞り込み中の著者はリンクにせず文字で出す）
+const listed = (app) => app.element('works-list').children.filter((node) => node.className === 'catalog-item').map((item) => {
+  const meta = item.children[0].children[1];
+  const link = meta.children.find((node) => node.className === 'author-link');
+  return { link, author: link ? link.textContent : meta.textContent.split('　')[0] };
+});
+const catalogHeading = (app) => app.element('works-list').children
+  .find((node) => node.className === 'works-section' && node.textContent.startsWith('青空文庫から探す')).textContent;
+
+test('「著者から探す」の著者は目録の著者名と一致し、押すとその著者に絞り込む', async () => {
+  const data = JSON.parse(source('data/catalog.json'));
+  const authorColumn = data.fields.indexOf('author');
+  const authors = new Set(data.works.map((row) => row[authorColumn]));
+  const app = reader(catalog(async () => ({ ok: true, json: async () => data })));
+  const shortcuts = [...app.api.authorShortcuts];
+  assert.ok(shortcuts.length > 0);
+  // 「森鷗外」のように目録と違う字で書くと、押しても 0 件になる
+  for (const name of shortcuts) assert.ok(authors.has(name), '目録にない著者名: ' + name);
+  app.api.renderWorksList();
+  const chips = app.element('works-list').children.find((node) => node.className === 'author-shortcuts');
+  assert.deepEqual(chips.children.map((chip) => chip.textContent), shortcuts);
+  chips.children.find((chip) => chip.textContent === '森鴎外').events.click();
+  await flush();
+  assert.equal(app.element('works-search').value, '森鴎外');
+  assert.match(catalogHeading(app), /・森鴎外の作品（\d+）$/);
+  const works = listed(app);
+  assert.ok(works.length > 0);
+  assert.ok(works.every(({ link, author }) => !link && author === '森鴎外'));
+});
+
+test('著者名を押すとその著者だけに絞り、検索欄の書き換えや開き直しで解除する', async () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => JSON.parse(source('data/catalog.json')) })));
+  app.element('works-search').value = 'こころ';
+  app.api.renderWorksList();
+  await flush();
+  // 作品名に「こころ」を含む他の著者の作品も出ている
+  assert.ok(listed(app).some(({ author }) => author !== '夏目漱石'));
+  const filter = () => listed(app).find(({ author }) => author === '夏目漱石').link.events.click();
+  filter();
+  assert.equal(app.element('works-search').value, '夏目漱石');
+  assert.match(catalogHeading(app), /・夏目漱石の作品（\d+）$/);
+  assert.ok(listed(app).every(({ link, author }) => !link && author === '夏目漱石'));
+
+  app.element('works-search').value = 'こころ';
+  app.element('works-search').events.input();
+  assert.doesNotMatch(catalogHeading(app), /の作品/);
+  assert.ok(listed(app).some(({ author }) => author !== '夏目漱石'));
+
+  filter();
+  app.api.openWorks('こころ');
+  assert.doesNotMatch(catalogHeading(app), /の作品/);
+  assert.ok(listed(app).some(({ author }) => author !== '夏目漱石'));
+});
+
 test('400msの保存待ちより先に別作品を選んでも旧作品の位置が残る', () => {
   const app = reader({}, { fetch: () => new Promise(() => {}), Library: { getText: () => new Promise(() => {}) } });
   for (const target of ['next.txt', 'lib:next']) {
@@ -131,25 +209,26 @@ test('空の目録も読込済みとして扱い再取得ループにならな�
   assert.equal(api.isLoaded(), true);
 });
 
-test('続きから読むは旧データを引き継ぎ、最近読んだ5作品を重複なく保存・表示する', () => {
+test('続きから読むは旧データを引き継ぎ、最近読んだ10作品を重複なく保存・表示する', () => {
   const app = reader({}, { fetch: () => new Promise(() => {}) });
-  const works = Array.from({ length: 7 }, (_, i) => ({ file: `work${i}.txt`, title: `作品${i}` }));
+  const works = Array.from({ length: 12 }, (_, i) => ({ file: `work${i}.txt`, title: `作品${i}` }));
   app.api.seedWorks(works, [{ id: 'shelf', title: '本棚の作品' }]);
   app.storage.set('aozora-reader:last', JSON.stringify('work0.txt'));
   app.storage.set('aozora-reader:pos:site:work0.txt', JSON.stringify({ percent: 42 }));
   app.api.renderHome();
   assert.equal(app.element('home-resume').children.length, 1);
-  assert.equal(app.element('home-resume').children[0].children[1].textContent, '前回の位置：42%');
+  assert.equal(app.element('home-resume').children[0].children[0].children[1].textContent, '前回の位置：42%');
 
-  for (let i = 1; i <= 6; i++) app.api.openText(`site:work${i}.txt`, `作品${i}`, '本文');
+  for (let i = 1; i <= 11; i++) app.api.openText(`site:work${i}.txt`, `作品${i}`, '本文');
   app.api.openText('site:work3.txt', '作品3', '本文');
   app.api.openText('lib:shelf', '本棚の作品', '本文');
   const recent = JSON.parse(app.storage.get('aozora-reader:recent'));
-  assert.deepEqual(recent, ['lib:shelf', 'work3.txt', 'work6.txt', 'work5.txt', 'work4.txt']);
+  assert.deepEqual(recent, ['lib:shelf', 'work3.txt', 'work11.txt', 'work10.txt', 'work9.txt',
+    'work8.txt', 'work7.txt', 'work6.txt', 'work5.txt', 'work4.txt']);
   app.storage.set('aozora-reader:pos:lib:shelf', JSON.stringify({ percent: 100 }));
   app.api.renderHome();
-  const cards = app.element('home-resume').children;
-  assert.equal(cards.length, 5);
+  const cards = app.element('home-resume').children.map((row) => row.children[0]);
+  assert.equal(cards.length, 10);
   assert.equal(cards[0].children[1].textContent, '前回の位置：100%');
   assert.equal(cards[0].children[2].children[0].style.width, '100%');
 
@@ -158,13 +237,21 @@ test('続きから読むは旧データを引き継ぎ、最近読んだ5作品�
   assert.equal(app.element('current-title').textContent, '作品3');
   assert.deepEqual(JSON.parse(app.storage.get('aozora-reader:recent')), recent);
 
+  // 「一覧から外す」は一覧から外すだけで、読書位置は残す。
+  app.api.renderHome();
+  app.element('home-resume').children[0].children[1].events.click();
+  assert.deepEqual(JSON.parse(app.storage.get('aozora-reader:recent')), recent.slice(1));
+  assert.equal(app.element('home-resume').children.length, 9);
+  assert.deepEqual(JSON.parse(app.storage.get('aozora-reader:pos:lib:shelf')), { percent: 100 });
+  app.storage.set('aozora-reader:recent', JSON.stringify(recent));
+
   // 再起動相当の描画でも順序を保ち、削除済みの本棚作品は除く。
   const restarted = reader({});
   for (const [key, value] of app.storage) restarted.storage.set(key, value);
   restarted.api.seedWorks(works);
   restarted.api.renderHome();
-  assert.equal(restarted.element('home-resume').children.length, 4);
-  assert.equal(restarted.element('home-resume').children[0].children[0].textContent, '作品3');
+  assert.equal(restarted.element('home-resume').children.length, 9);
+  assert.equal(restarted.element('home-resume').children[0].children[0].children[0].textContent, '作品3');
   restarted.api.seedWorks([]);
   restarted.api.renderHome();
   assert.equal(restarted.element('home-resume-section').hidden, true);

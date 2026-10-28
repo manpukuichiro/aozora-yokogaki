@@ -51,6 +51,8 @@ const Catalog = (() => {
               translator: row[index.translator],
               kana: data.kanaTypes[row[index.kana]] || '',
               copyright: row[index.copyright] === 1,
+              // アクセスランキングの順位（ランキング外と、順位のない古い目録は 0）
+              rank: row[index.rank] || 0,
               card: CARDS + row[index.dir] + '/card' + Number(row[index.id]) + '.html',
               zip: row[index.zip] ? CARDS + row[index.dir] + '/files/' + row[index.zip] : '',
             };
@@ -75,27 +77,30 @@ const Catalog = (() => {
     return loaded;
   }
 
-  // 作品名の完全一致、著者（「漱石」で夏目漱石の作品）、作品名の前方一致、途中一致の順に並べる。
-  // 同じ順位の中は目録の並び（読みの順）のまま
-  function search(query, { exclude = () => false } = {}) {
+  // order が 'popular'（人気順）なら、アクセスランキングの順位がある作品を順位の順に先に出し、
+  // 残りは作品名の完全一致、著者（「漱石」で夏目漱石の作品）、作品名の前方一致、途中一致の順に並べる。
+  // 'kana'（50音順）なら、目録の並び（作品名の読みの順）のまま。
+  // author を指定すると、著者名がそれと一致する作品だけにする（作品名などに著者名を含む他の著者の作品は除く）
+  function search(query, { exclude = () => false, author = null, order = 'popular' } = {}) {
     const words = terms(query);
     if (!words.length) return [];
     const ranked = [];
     for (const work of works) {
+      if (author !== null && work.author !== author) continue;
       if (!matches(work, words)) continue;
-      const rank = words.reduce((sum, key) => {
+      if (exclude(work)) continue;
+      const relevance = words.reduce((sum, key) => {
         if (work.titleKey === key || work.titleYomiKey === key) return sum;
         if (work.authorKey.includes(key)) return sum + 1;
         if (work.titleKey.startsWith(key) || work.titleYomiKey.startsWith(key)) return sum + 2;
         return sum + 3;
       }, 0);
-      if (exclude(work)) continue;
-      ranked.push([rank, work]);
+      ranked.push([work.rank || Infinity, relevance, work]);
     }
-    ranked.sort((a, b) => a[0] - b[0]);
-    return ranked.map(([, work]) => work);
+    // sort は安定なので、同じ値の作品は目録の並びのまま
+    if (order === 'popular') ranked.sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
+    return ranked.map(([, , work]) => work);
   }
-
   function get(workId) {
     return byId.get(workId) || null;
   }

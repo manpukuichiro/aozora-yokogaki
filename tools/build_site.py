@@ -16,6 +16,9 @@ PAGES = ['index.html', 'NOTICE.html']
 # 版番号の置き場所。手元の HTML では「開発版」と書いておき、公開物でビルドの版に置き換える
 BUILD_VERSION = re.compile(r'(<span class="build-version">)[^<]*(</span>)')
 JST = datetime.timezone(datetime.timedelta(hours=9))
+# 目録（data/catalog.json）に必要な列と大きさの上限。検索を始めると全体を読み込むので、重くなりすぎないようにする
+CATALOG_FIELDS = ['id', 'title', 'titleYomi', 'subtitle', 'author', 'authorYomi', 'translator', 'dir', 'zip', 'kana', 'copyright', 'rank']
+CATALOG_MAX_BYTES = 4 * 1024 * 1024
 
 
 def build_version():
@@ -54,6 +57,23 @@ def add_version_query(html, destination):
     return ASSET_REFERENCE.sub(replace, html)
 
 
+def check_catalog(path):
+    """目録の列・各行の長さ・人気順に使う順位・ファイルの大きさを確かめ、読み込んだ目録を返す。"""
+    size = path.stat().st_size
+    if size > CATALOG_MAX_BYTES:
+        raise ValueError(f'目録が大きすぎます: {size // 1024} KB（上限 {CATALOG_MAX_BYTES // 1024} KB）')
+    catalog = json.loads(path.read_text(encoding='utf-8'))
+    missing = [name for name in CATALOG_FIELDS if name not in catalog['fields']]
+    if missing:
+        raise ValueError('目録に必要な列がありません: ' + ', '.join(missing))
+    if not catalog['works'] or any(len(row) != len(catalog['fields']) for row in catalog['works']):
+        raise ValueError('目録の作品がないか、列の数が合わない行があります')
+    rank_col = catalog['fields'].index('rank')
+    if not any(row[rank_col] for row in catalog['works']):
+        raise ValueError('目録に順位のある作品がありません（人気順が働きません）')
+    return catalog
+
+
 def build(destination):
     destination = pathlib.Path(destination).resolve()
     if destination.exists():
@@ -62,8 +82,9 @@ def build(destination):
     subprocess.run(['node', '--test', 'dev/reader.test.js', 'dev/safety.test.js'], cwd=ROOT, check=True)
     subprocess.run(['node', 'dev/aozora.test.js'], cwd=ROOT, check=True)
     entries = json.loads((ROOT / 'texts/index.json').read_text(encoding='utf-8'))
-    catalog = json.loads((ROOT / 'data/catalog.json').read_text(encoding='utf-8'))
-    rights = {str(w[0]).zfill(6): w[-1] for w in catalog['works']}
+    catalog = check_catalog(ROOT / 'data/catalog.json')
+    id_col, copyright_col = catalog['fields'].index('id'), catalog['fields'].index('copyright')
+    rights = {str(w[id_col]).zfill(6): w[copyright_col] for w in catalog['works']}
     names = set()
     for work in entries:
         name = work['file']

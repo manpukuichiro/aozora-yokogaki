@@ -6,6 +6,8 @@
   --border: #dedad0;
   --control-bg: #ffffff;
   --accent: #3c5a8a;
+  /* 取り消せない操作（本棚から削除） */
+  --danger: #b3261e;
 
   /* reader.js が上書きする読書用の値 */
   --font-size: 18px;
@@ -26,6 +28,7 @@
     --border: #33353a;
     --control-bg: #222327;
     --accent: #8fb0e0;
+    --danger: #f2948a;
     color-scheme: dark;
   }
 }
@@ -38,6 +41,7 @@
   --border: #d8cbaa;
   --control-bg: #fbf5e6;
   --accent: #7a4f1d;
+  --danger: #a3291c;
 }
 
 :root[data-theme="dark"] {
@@ -48,6 +52,7 @@
   --border: #33353a;
   --control-bg: #222327;
   --accent: #8fb0e0;
+  --danger: #f2948a;
   color-scheme: dark;
 }
 
@@ -242,6 +247,7 @@ body {
 }
 
 .shelf-item > .work-item,
+.shelf-item > .work-row,
 .shelf-item > .home-work {
   flex: 1;
   min-width: 0;
@@ -250,6 +256,12 @@ body {
 .shelf-remove {
   flex: none;
   margin-right: 12px;
+}
+
+/* 保存した本文と読書位置を消す操作なので赤にする（ホバーの色の上書きより強く指定する） */
+.text-button.shelf-remove,
+.text-button.shelf-remove:hover {
+  color: var(--danger);
 }
 
 .shelf-item-home {
@@ -518,8 +530,27 @@ button:disabled {
   line-height: 1.5;
 }
 
-.work-item:hover {
+.work-item:hover,
+.work-row:hover {
   background: var(--control-bg);
+}
+
+/* 著者名を押せる行：作品を開くボタンと著者名を横に並べる */
+.work-row {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  padding-right: 16px;
+}
+
+.work-row > .work-item {
+  flex: 1;
+  min-width: 0;
+  padding-right: 10px;
+}
+
+.work-row > .work-item:hover {
+  background: transparent;
 }
 
 .work-item:focus-visible {
@@ -585,6 +616,62 @@ button:disabled {
 .catalog-text .work-author {
   max-width: none;
   white-space: normal;
+}
+
+/* 目録の検索結果の著者名。押すとその著者の作品に絞り込む */
+.author-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.author-link:hover {
+  color: var(--accent);
+  text-decoration-style: solid;
+}
+
+/* 「作品を探す」の、押すと著者で絞り込むボタンの並び */
+.author-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 16px 10px;
+}
+
+.author-chip {
+  min-height: 30px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.author-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 全作品の検索結果の並べ方（人気順・50音順） */
+.catalog-order {
+  display: flex;
+  gap: 4px;
+  padding: 2px 16px 6px;
+}
+
+.catalog-order button {
+  min-height: 28px;
+  padding: 2px 10px;
+  font-size: 13px;
+}
+
+.catalog-order button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
 }
 
 .catalog-actions {
@@ -724,13 +811,6 @@ button:disabled {
   padding: 1.5rem 0 2.5rem;
 }
 
-.home-kicker {
-  margin: 0;
-  color: var(--accent);
-  font-size: 14px;
-  letter-spacing: 0.12em;
-}
-
 .home-title {
   margin: 0.2em 0 0.6em;
   font-family: var(--font-family);
@@ -836,7 +916,20 @@ button:disabled {
   gap: 8px;
 }
 
+.resume-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.resume-remove {
+  flex: none;
+}
+
 .resume-card {
+  flex: 1;
+  min-width: 0;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: baseline;
@@ -963,6 +1056,19 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: 12px;
+}
+
+/* 読書と関係しないアプリは、小見出しで分けて下に並べる */
+.home-apps-other {
+  margin: 20px 0 10px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: normal;
+}
+
+/* 1 つだけでも上の列と同じ幅にする（auto-fit だと横いっぱいに広がる） */
+.home-apps-other + .home-apps {
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
 }
 
 .home .home-app {
@@ -1390,8 +1496,10 @@ main {
     min-height: 44px;
   }
 
-  .catalog-actions a {
+  .catalog-actions a,
+  .author-link {
     display: inline-block;
+    min-height: 0;
     padding: 6px 0;
   }
 
@@ -1439,12 +1547,18 @@ main {
 @media (hover: none) {
   .stepper button:hover,
   .work-item:hover,
+  .work-row:hover,
   .toc-item:hover {
     background: transparent;
   }
 
   .text-button:hover {
     color: var(--muted);
+  }
+
+  .author-chip:hover {
+    border-color: var(--border);
+    color: inherit;
   }
 
   .site-link:hover {

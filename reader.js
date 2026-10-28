@@ -333,18 +333,55 @@
     const subtitle = (work.subtitle || '').replace(/^\d+\s+/, '');
     title.textContent = work.title + (subtitle && subtitle !== work.title ? '　' + subtitle : '');
     button.append(title);
-    const meta = [showAuthor ? work.author : '', work.translator ? work.translator + ' 訳' : ''].filter(Boolean).join('　');
+    button.addEventListener('click', () => {
+      worksDialog.close();
+      selectWork(value);
+    });
+    const translator = work.translator ? work.translator + ' 訳' : '';
+    // 著者名は押すとその著者に絞り込むので、作品を開くボタンの外に置く（ボタンの中にボタンは置けない）
+    if (showAuthor && work.author && work.author !== authorFilter) {
+      const row = document.createElement('div');
+      row.className = 'work-row';
+      const meta = document.createElement('span');
+      meta.className = 'work-author';
+      meta.append(authorLink(work.author), translator ? '　' + translator : '');
+      row.append(button, meta);
+      return row;
+    }
+    const meta = [showAuthor ? work.author : '', translator].filter(Boolean).join('　');
     if (meta) {
       const author = document.createElement('span');
       author.className = 'work-author';
       author.textContent = meta;
       button.append(author);
     }
-    button.addEventListener('click', () => {
-      worksDialog.close();
-      selectWork(value);
-    });
     return button;
+  }
+
+  // 何を検索すればよいか迷ったとき用に、よく読まれている著者を押すだけで絞り込めるようにする。
+  // 名前は目録（data/catalog.json）の著者名と完全に一致させる（森鷗外は目録では「森鴎外」）
+  const AUTHOR_SHORTCUTS = ['芥川竜之介', '宮沢賢治', '太宰治', '夏目漱石', '谷崎潤一郎', '夢野久作',
+    '中島敦', '森鴎外', '江戸川乱歩', '坂口安吾', '泉鏡花', '樋口一葉', '与謝野晶子', '吉川英治'];
+
+  function authorShortcuts() {
+    const list = document.createElement('div');
+    list.className = 'author-shortcuts';
+    for (const author of AUTHOR_SHORTCUTS) {
+      const button = authorLink(author);
+      button.className = 'author-chip';
+      list.append(button);
+    }
+    return [section('著者から探す'), list];
+  }
+
+  function authorLink(author) {
+    const link = document.createElement('button');
+    link.type = 'button';
+    link.className = 'author-link';
+    link.textContent = author;
+    link.title = author + 'の作品に絞り込む';
+    link.addEventListener('click', () => filterByAuthor(author));
+    return link;
   }
 
   function section(label, count) {
@@ -362,16 +399,31 @@
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'text-button shelf-remove';
-    remove.textContent = '削除';
-    remove.setAttribute('aria-label', titleOf(book) + 'を本棚から削除');
+    // 「続きから読む」の「一覧から外す」と違い、保存した本文と読書位置を消すことがわかるようにする
+    remove.textContent = '本棚から削除';
+    remove.title = 'このブラウザに保存した本文と読書位置を消します';
+    remove.setAttribute('aria-label', titleOf(book) + 'を本棚から削除（保存した本文と読書位置を消します）');
     remove.addEventListener('click', () => removeBook(book));
     row.append(open, remove);
     return row;
   }
 
+  // 目録の検索結果で著者名を押すと、その著者の作品だけに絞る。検索欄を書き換えると解除する
+  let authorFilter = null;
+
+  function filterByAuthor(author) {
+    authorFilter = author;
+    worksSearch.value = author;
+    catalogShown = CATALOG_PAGE;
+    renderWorksList();
+    worksList.scrollTop = 0;
+  }
+
   function renderWorksList() {
     const words = Catalog.terms(worksSearch.value);
-    const matches = (work) => Catalog.matches(work, words);
+    const matches = authorFilter === null
+      ? (work) => Catalog.matches(work, words)
+      : (work) => work.author === authorFilter;
     const byAuthor = document.querySelector('input[name="works-order"]:checked').value === 'author';
     const nodes = [];
 
@@ -385,6 +437,8 @@
       worksList.replaceChildren(...nodes);
       return;
     }
+
+    if (!words.length) nodes.push(...authorShortcuts());
 
     const bundled = siteWorks.filter(matches);
     if (bundled.length && !byAuthor) {
@@ -422,10 +476,12 @@
     return p;
   }
 
+  // 目録（約 2.7MB）は、検索語が入るまで読み込まない
   function catalogNodes(query) {
     if (!query) {
       return [note('作品名や著者名で検索すると、ここに収録されていない青空文庫の全作品（約 1 万 8 千作品）からも探せます。', 'works-hint')];
     }
+    const heading = '青空文庫から探す';
     if (!Catalog.isLoaded()) {
       if (catalogFailed) {
         const retry = document.createElement('button');
@@ -436,7 +492,7 @@
           catalogFailed = false;
           renderWorksList();
         });
-        return [section('青空文庫の全作品から'), note('目録を読み込めませんでした。通信状態を確かめて再読み込みしてください。'), retry];
+        return [section(heading), note('目録を読み込めませんでした。通信状態を確かめて再読み込みしてください。'), retry];
       }
       if (!catalogPending) {
         catalogPending = true;
@@ -454,17 +510,49 @@
           },
         );
       }
-      return [section('青空文庫の全作品から'), note('目録を読み込んでいます…')];
+      return [section(heading), note('目録を読み込んでいます…')];
     }
 
     // 収録作品と本棚にある作品は上に出ているので、ここでは除く
     const shown = new Set([...siteWorks.map((work) => work.workId), ...books.map((book) => book.workId)].filter(Boolean));
-    const results = Catalog.search(worksSearch.value, { exclude: (work) => shown.has(work.workId) });
-    const nodes = [section('青空文庫から探す', results.length)];
+    const exclude = (work) => shown.has(work.workId);
+    const order = loadJSON('catalogOrder') === 'kana' ? 'kana' : 'popular';
+    const results = Catalog.search(worksSearch.value, { exclude, author: authorFilter, order });
+    const nodes = [section(authorFilter === null ? heading : heading + '・' + authorFilter + 'の作品', results.length)];
     if (!results.length) {
       nodes.push(note('「' + worksSearch.value + '」に当てはまる作品はありません。'));
       return nodes;
     }
+    nodes.push(catalogOrderSwitch(order), ...catalogResults(results));
+    return nodes;
+  }
+
+  // 検索結果の並べ方（人気順・50音順）。選んだものを覚える
+  function catalogOrderSwitch(current) {
+    const group = document.createElement('div');
+    group.className = 'catalog-order';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', '検索結果の並べ方');
+    for (const [value, label] of [['popular', '人気順'], ['kana', '50音順']]) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.setAttribute('aria-pressed', String(value === current));
+      button.addEventListener('click', () => {
+        if (value === current) return;
+        saveJSON('catalogOrder', value);
+        catalogShown = CATALOG_PAGE;
+        const scrollTop = worksList.scrollTop;
+        renderWorksList();
+        worksList.scrollTop = scrollTop;
+      });
+      group.append(button);
+    }
+    return group;
+  }
+
+  function catalogResults(results) {
+    const nodes = [];
     nodes.push(note(touchScreen.matches
       ? '「zip をダウンロード」で青空文庫からテキストを保存し、その下に出る「開く…」から選ぶと読めます。'
       : '「zip をダウンロード」で青空文庫からテキストを保存し、この画面にドラッグ＆ドロップすると読めます。', 'works-hint'));
@@ -495,7 +583,12 @@
     title.textContent = work.title + (work.subtitle ? '　' + work.subtitle : '');
     const meta = document.createElement('span');
     meta.className = 'work-author';
-    meta.textContent = [work.author, work.translator ? work.translator + ' 訳' : '', work.kana].filter(Boolean).join('　');
+    const rest = [work.translator ? work.translator + ' 訳' : '', work.kana].filter(Boolean).join('　');
+    if (work.author && work.author !== authorFilter) {
+      meta.append(authorLink(work.author), rest ? '　' + rest : '');
+    } else {
+      meta.textContent = [work.author, rest].filter(Boolean).join('　');
+    }
     text.append(title, meta);
 
     const actions = document.createElement('div');
@@ -555,6 +648,7 @@
     document.getElementById('works-show-all').hidden = !shelfOnly;
     document.getElementById('works-order').hidden = shelfOnly;
     if (typeof query === 'string') worksSearch.value = query;
+    authorFilter = null;
     catalogShown = CATALOG_PAGE;
     renderWorksList();
     worksDialog.showModal();
@@ -571,6 +665,7 @@
     if (event.target === worksDialog) worksDialog.close();
   });
   worksSearch.addEventListener('input', () => {
+    authorFilter = null;
     catalogShown = CATALOG_PAGE;
     renderWorksList();
     worksList.scrollTop = 0;
@@ -626,16 +721,19 @@
 
   // ---- ホーム（はじめに） ----
 
+  // 「続きから読む」に出す作品の数
+  const RECENT_MAX = 10;
+
   function recentWorks() {
     const saved = loadJSON('recent');
     // 旧版の「最後の1作品」は初回に引き継ぐ。
     const values = Array.isArray(saved) ? saved : [loadJSON('last')];
-    return [...new Set(values)].filter((value) => isAvailable(value) && workOf(value)).slice(0, 5);
+    return [...new Set(values)].filter((value) => isAvailable(value) && workOf(value)).slice(0, RECENT_MAX);
   }
 
   function rememberRecent(value) {
     if (!isAvailable(value) || !workOf(value)) return;
-    saveJSON('recent', [value, ...recentWorks().filter((item) => item !== value)].slice(0, 5));
+    saveJSON('recent', [value, ...recentWorks().filter((item) => item !== value)].slice(0, RECENT_MAX));
     saveJSON('last', value);
   }
 
@@ -660,7 +758,23 @@
     bar.append(fill);
     button.append(title, meta, bar);
     button.addEventListener('click', () => selectWork(value));
-    return button;
+    // 一覧から外すだけで、読書位置は残す（次に開いたときも続きから読める）
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'text-button resume-remove';
+    // 「削除」だと作品や読書位置まで消えるように見えるので、一覧から外すだけだとわかる文言にする
+    remove.textContent = '一覧から外す';
+    remove.title = '作品と読書位置は残ります';
+    remove.setAttribute('aria-label', titleOf(workOf(value)) + 'を「続きから読む」の一覧から外す（作品と読書位置は残ります）');
+    remove.addEventListener('click', () => {
+      saveJSON('recent', recentWorks().filter((item) => item !== value));
+      renderHome();
+      showToast('「' + workOf(value).title + '」を一覧から外しました。作品と読書位置は残っていて、次に開くと続きから読めます。');
+    });
+    const row = document.createElement('div');
+    row.className = 'resume-item';
+    row.append(button, remove);
+    return row;
   }
 
   function showReader() {
@@ -876,7 +990,10 @@
   // ---- 本棚からの削除 ----
 
   async function removeBook({ id, title }) {
-    if (!confirm('「' + title + '」を本棚から削除しますか？\nこの作品の読書位置も消えます。')) return;
+    if (!confirm('「' + title + '」を本棚から削除しますか？\n\n'
+      + 'このブラウザに保存した本文と読書位置が消え、元に戻せません。\n'
+      + 'また読むときは、zip（テキスト）をもう一度読み込んでください。\n'
+      + '（青空文庫の作品や、ダウンロードした zip ファイルは消えません）')) return;
     try {
       await Library.remove(id);
     } catch (error) {
@@ -896,7 +1013,7 @@
     }
     await refreshLibrary();
     saveJSON('recent', recentWorks());
-    const notice = '「' + title + '」を本棚から削除しました。';
+    const notice = '「' + title + '」を本棚から削除しました。また読むときは、zip（テキスト）をもう一度読み込んでください。';
     if (currentValue === LIB_PREFIX + id) {
       showHome(notice);
     } else if (!homeEl.hidden) {

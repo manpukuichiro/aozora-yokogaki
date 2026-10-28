@@ -20,8 +20,13 @@ works の各要素は fields の順の配列:
     zip         テキスト zip のファイル名（https://www.aozora.gr.jp/cards/{dir}/files/ 以下。なければ ""）
     kana        文字遣い種別の番号（kanaTypes の添字）
     copyright   著作権が存続している作品なら 1（青空文庫が許諾を得て公開しているもの）
+    rank        青空文庫のアクセスランキングでの順位（ランキング外は 0）。検索結果の「人気順」に使う
+
+使い方の補足:
+    --ranking   順位に使うランキングのページ名（既定は fetch_popular.py と同じ 2022_xhtml）
 """
 
+import argparse
 import datetime
 import json
 import pathlib
@@ -45,14 +50,21 @@ from fetch_popular import (  # noqa: E402  同じフォルダのスクリプト�
     ROOT,
     load_catalog,
     person_name,
+    ranked_work_ids,
 )
 
 OUT = ROOT / "data" / "catalog.json"
 CARDS = "https://www.aozora.gr.jp/cards/"
-FIELDS = ["id", "title", "titleYomi", "subtitle", "author", "authorYomi", "translator", "dir", "zip", "kana", "copyright"]
+FIELDS = ["id", "title", "titleYomi", "subtitle", "author", "authorYomi", "translator", "dir", "zip", "kana", "copyright", "rank"]
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--ranking", default="2022_xhtml", help="順位に使うランキングのページ名（既定 2022_xhtml）")
+    args = parser.parse_args()
+
+    print(f"ランキング {args.ranking} を取得中…")
+    ranks = {work_id: rank for rank, work_id in enumerate(ranked_work_ids(args.ranking, sleep=1), start=1)}
     print("作品一覧 CSV を取得中…")
     catalog = load_catalog(sleep=0)
 
@@ -83,6 +95,7 @@ def main():
             zip_match.group(1) if zip_match else "",
             kana_types.index(first[COL_KANA]),
             1 if copyright_alive else 0,
+            ranks.get(work_id, 0),
         ])
 
     # 読みの順に並べておく（ブラウザ側の並べ替えを省く）
@@ -92,12 +105,14 @@ def main():
         "source": CATALOG_URL,
         "generated": datetime.date.today().isoformat(),
         "fields": FIELDS,
+        "ranking": args.ranking,
         "kanaTypes": kana_types,
         "works": works,
     }
     OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     with_zip = sum(1 for work in works if work[8])
-    print(f"data/catalog.json に {len(works)} 作品（zip あり {with_zip}）を書き出しました（{OUT.stat().st_size // 1024} KB）")
+    ranked = sum(1 for work in works if work[11])
+    print(f"data/catalog.json に {len(works)} 作品（zip あり {with_zip}、順位あり {ranked}）を書き出しました（{OUT.stat().st_size // 1024} KB）")
 
 
 if __name__ == "__main__":
