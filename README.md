@@ -36,6 +36,7 @@ texts/aozora_*.txt  収録作品の本文（CORS を避けるため同じサイ�
 data/catalog.json   青空文庫の全作品の目録（tools/build_catalog.py が生成。本文は含まない）
 favicon.svg / favicon.ico / apple-touch-icon.png   アイコン（tools/make_favicon.py が生成）
 LICENSE             Apache License 2.0
+google72cd6a576759ab5e.html   Google Search Console の所有者確認用（消すと確認が外れる）
 tools/              データと公開物を作るスクリプト（下の「開発」を参照）
 dev/                テストと動作確認用のファイル（公開物には含まない）
 .github/workflows/pages.yml   GitHub Pages への公開
@@ -111,6 +112,7 @@ node dev/aozora.test.js                             # 青空文庫記法の解�
 - 出力先は、まだないフォルダを指定します（既存の出力は上書きしません）。生成時に通信はしません。
 - 目録 `data/catalog.json` に必要な列（人気順に使う `rank` を含む）がそろい、各行の列の数が合い、順位のある作品があり、大きさが 4MB 以下であることを確かめます。検索を始めると目録全体を読み込むため、作り直して急に重くなったときは止めます。
 - 実行に必要なファイル・アイコン・`NOTICE.html`・`LICENSE` と、一覧に含まれる本文だけをコピーします。`manifest.json` に、版と各ファイルのサイズ・SHA-256 を記録します。
+- 検索エンジン向けに、トップページと収録作品のページ（`?text=aozora_<作品ID>.txt`）を並べた `sitemap.xml` を作ります。Google Search Console の「サイトマップ」から `sitemap.xml` を送信します。`robots.txt` はドメインの直下にしか置けないため使いません。
 - 公開物だけで、次の書き換えをします（手元のファイルは変えません）。
   - **版番号**：`<span class="build-version">開発版</span>` を、ビルドした日（日本時間）とコミットの短い ID に置き換えます（例 `2026.10.28（c85c9e6）`）。GitHub Actions では `GITHUB_SHA` を使います。
   - **LICENSE**：拡張子のない `LICENSE` はリンクを押すとダウンロードになるため、`LICENSE.txt` としても置き、ページからのリンクをそちらに向けます。

@@ -11,7 +11,9 @@ import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 RUNTIME = ['index.html', 'style.css', 'reader.js', 'reader-data.js', 'library.js', 'aozora.js', 'catalog.js', 'NOTICE.html', 'LICENSE', '.nojekyll',
-           'favicon.svg', 'favicon.ico', 'apple-touch-icon.png']
+           'favicon.svg', 'favicon.ico', 'apple-touch-icon.png',
+           # Google Search Console の所有者確認（URL プレフィックス）。消すと確認が外れる
+           'google72cd6a576759ab5e.html']
 PAGES = ['index.html', 'NOTICE.html']
 # 版番号の置き場所。手元の HTML では「開発版」と書いておき、公開物でビルドの版に置き換える
 BUILD_VERSION = re.compile(r'(<span class="build-version">)[^<]*(</span>)')
@@ -19,6 +21,8 @@ JST = datetime.timezone(datetime.timedelta(hours=9))
 # 目録（data/catalog.json）に必要な列と大きさの上限。検索を始めると全体を読み込むので、重くなりすぎないようにする
 CATALOG_FIELDS = ['id', 'title', 'titleYomi', 'subtitle', 'author', 'authorYomi', 'translator', 'dir', 'zip', 'kana', 'copyright', 'rank']
 CATALOG_MAX_BYTES = 4 * 1024 * 1024
+# 公開先。サイトマップの URL に使う
+SITE_URL = 'https://manpukuichiro.github.io/aozora-yokogaki/'
 
 
 def build_version():
@@ -55,6 +59,14 @@ def add_version_query(html, destination):
         return f'{match.group(1)}{match.group(2)}?v={version}{match.group(3)}'
 
     return ASSET_REFERENCE.sub(replace, html)
+
+
+def sitemap(names):
+    """トップページと収録作品のページ（?text=本文のファイル名）を並べたサイトマップ。"""
+    urls = [SITE_URL] + [SITE_URL + '?text=' + name for name in names]
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    lines += [f'  <url><loc>{url}</loc></url>' for url in urls]
+    return '\n'.join(lines + ['</urlset>']) + '\n'
 
 
 def check_catalog(path):
@@ -110,6 +122,9 @@ def build(destination):
     # 公開物では LICENSE.txt としても置き、ページからはそちらへリンクして文面を表示させる
     shutil.copyfile(ROOT / 'LICENSE', destination / 'LICENSE.txt')
     files.append('LICENSE.txt')
+    # Search Console に送信する。robots.txt はドメイン直下にしか置けないので使わない
+    (destination / 'sitemap.xml').write_text(sitemap(sorted(names)), encoding='utf-8', newline='')
+    files.append('sitemap.xml')
     version = build_version()
     # 読み込むファイルを先にすべて置いてから、HTML を書き換える（版番号・LICENSE へのリンク・参照のハッシュ）
     for page in PAGES:
