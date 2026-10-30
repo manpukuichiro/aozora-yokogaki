@@ -122,7 +122,10 @@
       <button type="button" id="works-close">閉じる</button>
     </div>
     <div class="works-controls">
-      <input type="search" id="works-search" aria-describedby="works-search-help" placeholder="作品名・著者名で検索（ひらがなでも可）" aria-label="作品を検索" autocomplete="off">
+      <div class="search-field">
+        <input type="search" id="works-search" aria-describedby="works-search-help" placeholder="作品名・著者名で検索（ひらがなでも可）" aria-label="作品を検索" autocomplete="off">
+        <button type="button" class="search-clear" id="works-search-clear" aria-label="検索語を消す" hidden>×</button>
+      </div>
       <p class="search-help" id="works-search-help">例：猫 漱石　空白で区切って絞り込めます。</p>
       <button type="button" class="text-button" id="works-show-all" hidden>すべての作品を探す</button>
       <div id="works-order" class="segmented" role="radiogroup" aria-label="並べ方">

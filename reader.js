@@ -36,6 +36,7 @@
   const homeEl = document.getElementById('home');
   const worksDialog = document.getElementById('works-dialog');
   const worksSearch = document.getElementById('works-search');
+  const worksSearchClear = document.getElementById('works-search-clear');
   const worksList = document.getElementById('works-list');
   const fileInput = document.getElementById('file-input');
   const progressEl = document.getElementById('progress');
@@ -502,6 +503,7 @@
   }
 
   function renderWorksList() {
+    worksSearchClear.hidden = !worksSearch.value;
     const words = Catalog.terms(worksSearch.value);
     const matches = authorFilter === null
       ? (work) => Catalog.matches(work, words)
@@ -746,11 +748,19 @@
   worksDialog.addEventListener('click', (event) => {
     if (event.target === worksDialog) worksDialog.close();
   });
-  worksSearch.addEventListener('input', () => {
+  function searchChanged() {
     authorFilter = null;
     catalogShown = CATALOG_PAGE;
     renderWorksList();
     worksList.scrollTop = 0;
+  }
+  worksSearch.addEventListener('input', searchChanged);
+  // 検索語を消して、検索前の一覧（著者から探す・すぐに読める作品）に戻す。
+  // タッチ操作の端末では画面キーボードで一覧が隠れないよう、検索欄には入らない
+  worksSearchClear.addEventListener('click', () => {
+    worksSearch.value = '';
+    searchChanged();
+    if (!touchScreen.matches) worksSearch.focus();
   });
   // 検索欄で Enter を押したら、いちばん上の作品を開く
   worksSearch.addEventListener('keydown', (event) => {

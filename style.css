@@ -466,11 +466,19 @@ button:disabled {
   border-bottom: 1px solid var(--border);
 }
 
-.works-controls input[type="search"] {
+/* 検索欄と、右端の「検索語を消す」ボタン */
+.search-field {
+  position: relative;
+  display: flex;
   flex: 1 1 14rem;
   min-width: 0;
+}
+
+.works-controls input[type="search"] {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 36px;
-  padding: 4px 10px;
+  padding: 4px 40px 4px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--control-bg);
@@ -481,6 +489,40 @@ button:disabled {
 .works-controls input[type="search"]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* ブラウザ標準の小さな × は環境ごとに出たり出なかったりするので消し、自前のボタンにそろえる */
+.works-controls input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-clear {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.search-clear[hidden] {
+  display: none;
+}
+
+.search-clear:hover {
+  color: var(--fg);
+  background: var(--border);
 }
 
 /* 人気順／著者別の切り替え */

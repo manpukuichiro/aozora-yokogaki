@@ -444,3 +444,23 @@ test('太さを測れない環境では全部の太さを選択肢に出す', ()
   const blank = reader(catalog(async () => ({})), { createElement: inkCanvas({ 300: 0, 400: 0, 500: 0, 600: 0, 700: 0 }) });
   assert.deepEqual(choices(blank, 500).options, [300, 400, 500, 600, 700]);
 });
+
+test('検索欄の × で検索語と著者の絞り込みを消し、検索前の一覧に戻る', async () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => JSON.parse(source('data/catalog.json')) })), { fetch: authorsFile });
+  await app.api.loadAuthorShortcuts();
+  const clear = app.element('works-search-clear');
+  app.api.openWorks('');
+  assert.equal(clear.hidden, true); // 何も入っていなければ出さない
+  assert.equal(chipNames(app).length, 10);
+  app.api.openWorks('こころ');
+  await flush();
+  assert.equal(clear.hidden, false);
+  assert.equal(chipNames(app).length, 0);
+  listed(app).find(({ link }) => link).link.events.click(); // 著者で絞り込んだ状態からでも戻れる
+  assert.notEqual(app.element('works-search').value, 'こころ');
+  clear.events.click();
+  assert.equal(app.element('works-search').value, '');
+  assert.equal(clear.hidden, true);
+  assert.equal(chipNames(app).length, 10);
+  assert.equal(app.element('works-list').children.some((node) => node.className === 'catalog-item'), false);
+});
