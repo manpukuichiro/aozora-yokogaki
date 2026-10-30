@@ -1,8 +1,9 @@
 """青空文庫の人気作品を取得して texts/ に置き、texts/index.json を生成する。
 
 使い方（リポジトリのルートで）:
-    python tools/fetch_popular.py              # 人気上位 100 作品
-    python tools/fetch_popular.py --count 50   # 本数を変える
+    python tools/fetch_popular.py                  # ランキング 300 位までの作品
+    python tools/fetch_popular.py --max-rank 100   # 範囲を変える
+    python tools/fetch_popular.py --count 50       # 本数で区切る
     python tools/fetch_popular.py --dry-run    # 取得せず、選ばれる作品だけ表示
 
 選び方:
@@ -135,7 +136,8 @@ def extract_text(data):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--count", type=int, default=100, help="取得する作品数（既定 100）")
+    parser.add_argument("--max-rank", type=int, default=300, help="ランキングの何位までを見るか（既定 300）")
+    parser.add_argument("--count", type=int, default=None, help="取得する作品数の上限（既定は上限なし）")
     parser.add_argument("--ranking", default="2022_xhtml", help="ランキングのページ名（既定 2022_xhtml）")
     parser.add_argument("--sleep", type=float, default=1.0, help="リクエストの間隔（秒）")
     parser.add_argument("--force", action="store_true", help="取得済みの作品も取り直す")
@@ -150,7 +152,7 @@ def main():
     selected = []
     skipped = []
     for rank, work_id in enumerate(ranking, start=1):
-        if len(selected) >= args.count:
+        if rank > args.max_rank or (args.count is not None and len(selected) >= args.count):
             break
         rows = catalog.get(work_id)
         if not rows:
