@@ -551,7 +551,8 @@
     }
 
     nodes.push(...catalogNodes(words.length > 0, order));
-    worksList.replaceChildren(...nodes);
+    // 読み込み待ちの作品は、検索し直しても見失わないよう一覧の先頭に置く（検索結果に出ているものはその場に）
+    worksList.replaceChildren(...pendingNodes(), ...nodes);
   }
 
   // 作品名の読み。『春と修羅』〔雨ニモマケズ〕のような括弧は外して並べる
@@ -579,11 +580,17 @@
     return p;
   }
 
-  // 目録（約 2.7MB）は、検索語が入るまで読み込まない
   // 青空文庫の検索結果に使う並べ方（Catalog.search の order）
   const CATALOG_ORDERS = { rank: 'popular', author: 'author', title: 'kana' };
 
+  // ダウンロードを押した作品（読み込み待ち）。検索し直しても見失わないよう、ページを開いている間だけ覚える。
+  // ダウンロードが終わったかはブラウザから確かめられないので、本棚に入るまで（または再読み込みまで）残す
+  const pendingDownloads = new Map();
+  let catalogVisible = new Set(); // いま検索結果に出ている作品（workId）
+
+  // 目録（約 2.7MB）は、検索語が入るまで読み込まない
   function catalogNodes(query, order = 'rank') {
+    catalogVisible = new Set();
     if (!query) {
       return [note('作品名や著者名で検索すると、すぐに読める作品のほかに、青空文庫の全作品（約 1 万 8 千作品）からも探せます（zip をダウンロードして読みます）。', 'works-hint')];
     }
@@ -635,9 +642,12 @@
   function catalogResults(results) {
     const nodes = [];
     nodes.push(note(touchScreen.matches
-      ? '「zip をダウンロード」で青空文庫からテキストを保存し、その下に出る「開く…」から選ぶと読めます。'
-      : '「zip をダウンロード」で青空文庫からテキストを保存し、この画面にドラッグ＆ドロップすると読めます。', 'works-hint'));
-    for (const work of results.slice(0, catalogShown)) nodes.push(catalogItem(work));
+      ? '「① ZIPをダウンロード」で青空文庫から保存し、その下に出る「② 保存したZIPを開く」で選ぶと読めます。'
+      : '「① ZIPをダウンロード」で青空文庫から保存し、その下に出る「② 保存したZIPを開く」で選ぶか、この画面にドラッグ＆ドロップすると読めます。', 'works-hint'));
+    for (const work of results.slice(0, catalogShown)) {
+      catalogVisible.add(work.workId);
+      nodes.push(catalogItem(work));
+    }
     if (results.length > catalogShown) {
       const more = document.createElement('button');
       more.type = 'button';
@@ -679,8 +689,11 @@
       const download = document.createElement('a');
       download.href = work.zip;
       download.download = '';
-      download.textContent = 'zip をダウンロード';
-      download.addEventListener('click', () => showOpenAfterDownload(item));
+      download.textContent = '① ZIPをダウンロード';
+      download.addEventListener('click', () => {
+        pendingDownloads.set(work.workId, work);
+        showOpenAfterDownload(item);
+      });
       actions.append(download);
     } else {
       actions.append(note('テキストの zip はありません', 'catalog-missing'));
@@ -693,25 +706,37 @@
     actions.append(card);
 
     item.append(text, actions);
+    if (pendingDownloads.has(work.workId)) showOpenAfterDownload(item);
     return item;
   }
 
-  // ダウンロードした作品の欄に、続けて開くためのボタンと案内を出す。
+  // 読み込み待ちのうち、本棚に入っておらず、いまの検索結果にも出ていない作品を一覧の先頭に出す
+  function pendingNodes() {
+    const saved = new Set(books.map((book) => book.workId).filter(Boolean));
+    for (const workId of pendingDownloads.keys()) if (saved.has(workId)) pendingDownloads.delete(workId);
+    const works = [...pendingDownloads.values()].filter((work) => !catalogVisible.has(work.workId));
+    if (!works.length) return [];
+    return [section('ダウンロードした作品（読み込み待ち）', works.length), ...works.map(catalogItem)];
+  }
+
+  // ダウンロードを押した作品の欄に、続けて開くためのボタンと案内を出す。
+  // ダウンロードが終わったかは分からないので「完了」とは書かない。
   // ポップアップの外の「ファイルを開く…」はポップアップ表示中は操作できないので、ここに専用の入力欄を置く
   function showOpenAfterDownload(item) {
     if (item.querySelector('.catalog-next')) return;
     const next = document.createElement('div');
     next.className = 'catalog-next';
-    next.append(note(touchScreen.matches
-      ? 'ダウンロードが終わったら「開く…」を押し、保存した zip を選んでください。iPhone・iPad では「ファイル」アプリの「ダウンロード」フォルダ、または選択画面の「最近使った項目」にあります。'
-      : 'ダウンロードが終わったら「開く…」から zip を選ぶか、この画面にドラッグ＆ドロップしてください。', 'catalog-hint'));
-    const open = document.createElement('label');
-    open.className = 'file-button';
-    open.textContent = '開く…';
+    const hint = note('ブラウザで保存が終わったら、次のボタンからZIPを選んでください。解凍は不要です。', 'catalog-hint');
+    hint.setAttribute('role', 'status'); // 押した直後に読み上げる
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'file-button primary catalog-open';
+    open.textContent = '② 保存したZIPを開く';
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.zip,.txt,application/zip,text/plain';
     input.hidden = true;
+    open.addEventListener('click', () => input.click());
     input.addEventListener('change', () => {
       const files = Array.from(input.files);
       input.value = '';
@@ -719,8 +744,17 @@
       worksDialog.close();
       importFiles(files);
     });
-    open.append(input);
-    next.append(open);
+    // 保存先が分からない人向けの短い補足（ふだんは閉じておく）
+    const where = document.createElement('details');
+    where.className = 'catalog-where';
+    const summary = document.createElement('summary');
+    summary.textContent = '保存先が分からないとき';
+    where.append(summary, ...[
+      'パソコン：多くのブラウザでは「ダウンロード」フォルダに保存されます（この画面にドラッグ＆ドロップしても読めます）。',
+      'iPhone・iPad：「ファイル」アプリの「ダウンロード」、または選択画面の「最近使った項目」。',
+      'Android：「ファイル」アプリの「ダウンロード」。',
+    ].map((text) => note(text, 'catalog-hint')));
+    next.append(hint, open, input, where);
     item.append(next);
   }
 

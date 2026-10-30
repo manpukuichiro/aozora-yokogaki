@@ -1586,7 +1586,7 @@ main {
   }
 }
 
-/* 全作品の検索結果で「zip をダウンロード」を押した後に出す、続けて開くための案内 */
+/* 全作品の検索結果で「① ZIPをダウンロード」を押した後に出す、続けて開くための案内 */
 .catalog-item {
   flex-wrap: wrap;
 }
@@ -1612,6 +1612,34 @@ main {
 
 .catalog-next .file-button {
   flex: none;
+}
+
+/* 次に押すボタンなので、塗りつぶして目立たせる */
+.catalog-next .catalog-open {
+  min-height: 44px;
+  padding: 8px 16px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: bold;
+}
+
+.catalog-next .catalog-open:hover {
+  filter: brightness(1.08);
+}
+
+.catalog-where {
+  flex: 1 0 100%;
+  font-size: 13px;
+}
+
+.catalog-where summary {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.catalog-where .catalog-hint {
+  margin: 4px 0 0;
 }
 
 /* タッチ操作の端末では、タップの後にホバーの色が残らないよう元に戻し、

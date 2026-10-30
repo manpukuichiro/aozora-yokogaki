@@ -75,6 +75,7 @@ class Element {
   showModal() { this.open = true; }
   close() { this.open = false; }
   focus() {}
+  click() { this.clicks = (this.clicks || 0) + 1; }
 }
 
 function reader(api, extra = {}) {
@@ -502,4 +503,74 @@ test('例文は検索語を入れるとしまい、消すと戻す', () => {
   assert.equal(app.element('works-search-help').hidden, true);
   app.element('works-search-clear').events.click();
   assert.equal(app.element('works-search-help').hidden, false);
+});
+
+// 青空文庫の検索結果から、作品の欄・①のリンク・押した後に出る案内を取り出す
+const catalogItems = (app) => app.element('works-list').children.filter((node) => node.className === 'catalog-item');
+const downloadLink = (item) => item.children[1].children[0];
+const nextStep = (item) => item.children.find((node) => node.className === 'catalog-next');
+const catalogTitle = (item) => item.children[0].children[0].textContent;
+
+test('① ZIPをダウンロードを押すと、その欄に案内と目立つ② 保存したZIPを開くを出し、完了とは書かない', async () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => JSON.parse(source('data/catalog.json')) })));
+  app.element('works-search').value = 'こころ';
+  app.api.renderWorksList();
+  await flush();
+  const item = catalogItems(app).find((node) => downloadLink(node).textContent === '① ZIPをダウンロード');
+  assert.ok(item);
+  assert.equal(nextStep(item), undefined); // 押すまでは出さない
+  downloadLink(item).events.click();
+  const next = nextStep(item);
+  const [hint, open, input, where] = next.children;
+  assert.equal(hint.textContent, 'ブラウザで保存が終わったら、次のボタンからZIPを選んでください。解凍は不要です。');
+  assert.equal(open.textContent, '② 保存したZIPを開く');
+  assert.ok(open.className.split(' ').includes('primary'));
+  assert.equal(input.type, 'file');
+  assert.equal(input.hidden, true);
+  open.events.click(); // ボタンを押すとファイルの選択画面を開く
+  assert.equal(input.clicks, 1);
+  input.files = [];
+  input.events.change(); // 選ばずに閉じたら何もしない
+  assert.equal(app.element('works-dialog').open, true);
+  assert.equal(where.className, 'catalog-where');
+  assert.equal(where.children[0].textContent, '保存先が分からないとき');
+  const allText = [hint, open, ...where.children.slice(1)].map((node) => node.textContent).join('');
+  assert.equal(allText.includes('完了'), false);
+  for (const place of ['パソコン', 'iPhone', 'Android']) assert.ok(allText.includes(place), place);
+});
+
+test('読み込み待ちの作品は、検索し直しても一覧の先頭に残り、本棚に入ると消える', async () => {
+  const api = catalog(async () => ({ ok: true, json: async () => JSON.parse(source('data/catalog.json')) }));
+  const app = reader(api);
+  app.element('works-search').value = 'こころ';
+  app.api.renderWorksList();
+  await flush();
+  const item = catalogItems(app).find((node) => downloadLink(node).textContent === '① ZIPをダウンロード');
+  const title = catalogTitle(item);
+  downloadLink(item).events.click();
+  const pendingHeading = (current) => current.element('works-list').children
+    .find((node) => node.className === 'works-section' && node.textContent.startsWith('ダウンロードした作品（読み込み待ち）'));
+
+  // 検索結果に出ているあいだは、その場で案内を出し続ける（先頭には重ねて出さない）
+  app.api.renderWorksList();
+  assert.equal(pendingHeading(app), undefined);
+  assert.ok(nextStep(catalogItems(app).find((node) => catalogTitle(node) === title)));
+
+  // 別の語で検索し直しても、先頭に案内つきで残る
+  app.element('works-search').value = '吾輩は猫である';
+  app.element('works-search').events.input();
+  assert.equal(pendingHeading(app).textContent, 'ダウンロードした作品（読み込み待ち）（1）');
+  const kept = app.element('works-list').children[1];
+  assert.equal(catalogTitle(kept), title);
+  assert.ok(nextStep(kept));
+
+  // 検索語を消しても残る
+  app.element('works-search-clear').events.click();
+  assert.ok(pendingHeading(app));
+
+  // 本棚に入ったら（読み込めたら）消す
+  const { workId } = api.search('こころ').find((work) => work.zip && work.title + (work.subtitle ? '　' + work.subtitle : '') === title);
+  app.api.seedWorks([], [{ id: 'saved', title, workId }]);
+  app.api.renderWorksList();
+  assert.equal(pendingHeading(app), undefined);
 });
