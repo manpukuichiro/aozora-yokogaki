@@ -251,6 +251,22 @@ body {
   #works-file-open span {
     white-space: nowrap;
   }
+
+  /* 並べ方が 3 つになったので、文字と余白を詰めて同じ行に収める */
+  .works .works-controls {
+    column-gap: 8px;
+    padding-inline: 12px;
+  }
+
+  #works-order label {
+    padding: 6px 7px;
+    font-size: 14px;
+  }
+
+  #works-file-open {
+    padding: 4px 8px;
+    font-size: 13px;
+  }
 }
 
 #works-order[hidden],
@@ -716,25 +732,6 @@ button:disabled {
   color: var(--accent);
 }
 
-/* 全作品の検索結果の並べ方（人気順・50音順） */
-.catalog-order {
-  display: flex;
-  gap: 4px;
-  padding: 2px 16px 6px;
-}
-
-.catalog-order button {
-  min-height: 28px;
-  padding: 2px 10px;
-  font-size: 13px;
-}
-
-.catalog-order button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--bg);
-}
-
 .catalog-actions {
   flex: none;
   display: flex;
@@ -777,6 +774,15 @@ button:disabled {
 
 .works-note a {
   color: var(--accent);
+}
+
+/* ふだんは 1 行だけにして、一覧の高さを空ける */
+.works-note summary {
+  cursor: pointer;
+}
+
+.works-note p {
+  margin: 4px 0 0;
 }
 
 /* ---- 目次 ---- */

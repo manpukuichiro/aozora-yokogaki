@@ -131,13 +131,15 @@
       <div id="works-order" class="segmented" role="radiogroup" aria-label="並べ方">
         <label><input type="radio" name="works-order" value="rank" checked>人気順</label>
         <label><input type="radio" name="works-order" value="author">著者別</label>
+        <label><input type="radio" name="works-order" value="title">作品名順</label>
       </div>
       <button type="button" class="file-button" id="works-file-open"><span>DLしたファイルを</span><span>開く…</span></button><input type="file" id="works-file-input" accept=".txt,.zip,text/plain,application/zip" multiple hidden>
     </div>
     <div class="works-list" id="works-list"></div>
-    <p class="works-note">
-      「すぐに読める作品」は、このサイトに入っている作品で、<a href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>の 2022 年アクセスランキング（XHTML 版）の上位から、著作権の消滅した作品を選んでいます。ほかの作品は、図書カードから zip をダウンロードし、上の「DLしたファイルを開く…」で選ぶか、パソコンでは画面にドラッグ＆ドロップすると読めます。
-    </p>
+    <details class="works-note">
+      <summary>「すぐに読める作品」とほかの作品の読み方</summary>
+      <p>「すぐに読める作品」は、このサイトに入っている作品で、<a href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>の 2022 年アクセスランキング（XHTML 版）の上位から、著作権の消滅した作品を選んでいます。ほかの作品は、図書カードから zip をダウンロードし、上の「DLしたファイルを開く…」で選ぶか、パソコンでは画面にドラッグ＆ドロップすると読めます。</p>
+    </details>
   </dialog>
 
   <dialog class="popup toc" id="toc-dialog" aria-labelledby="toc-title">

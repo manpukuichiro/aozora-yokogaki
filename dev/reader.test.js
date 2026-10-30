@@ -29,7 +29,7 @@ test('全目録と本棚・収録作品は同じAND条件を使う', async () =>
   assert.equal(api.matches({ title: '猫', author: '漱石' }, api.terms('猫漱石')), false);
 });
 
-test('全目録の検索は人気順と50音順を選べる', async () => {
+test('全目録の検索は人気順・著者別・50音順を選べる', async () => {
   const api = catalog(async () => ({ ok: true, json: async () => JSON.parse(source('data/catalog.json')) }));
   await api.load();
   const popular = api.search('漱石');
@@ -41,6 +41,15 @@ test('全目録の検索は人気順と50音順を選べる', async () => {
   assert.equal(kana.length, popular.length);
   const yomi = [...kana.map((work) => work.titleYomi)];
   assert.deepEqual(yomi, [...yomi].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+  // 著者別：著者名の読みの順、同じ著者の中は作品名の読みの順
+  const byAuthor = api.search('こころ', { order: 'author' });
+  assert.equal(byAuthor.length, api.search('こころ').length);
+  assert.ok(new Set(byAuthor.map((work) => work.author)).size > 1);
+  for (let i = 1; i < byAuthor.length; i++) {
+    const [a, b] = [byAuthor[i - 1], byAuthor[i]];
+    assert.ok(a.authorYomi <= b.authorYomi);
+    if (a.authorYomi === b.authorYomi) assert.ok(a.titleYomi <= b.titleYomi);
+  }
 });
 
 test('検索語がないうちは目録を読み込まない', () => {
@@ -78,7 +87,7 @@ function reader(api, extra = {}) {
   const document = {
     getElementById: element, createElement: extra.createElement || (() => new Element()), createDocumentFragment: () => new Element(),
     documentElement: Object.assign(new Element(), { scrollHeight: 2000 }),
-    querySelector: () => ({ value: 'rank' }), querySelectorAll: () => [],
+    querySelector: () => ({ value: extra.order || 'rank' }), querySelectorAll: () => [],
     fonts: { addEventListener() {}, ready: Promise.resolve() }, addEventListener() {},
   };
   const context = vm.createContext({
@@ -463,4 +472,34 @@ test('検索欄の × で検索語と著者の絞り込みを消し、検索前�
   assert.equal(clear.hidden, true);
   assert.equal(chipNames(app).length, 10);
   assert.equal(app.element('works-list').children.some((node) => node.className === 'catalog-item'), false);
+});
+
+test('上の並べ方の切り替えが、すぐに読める作品と青空文庫の検索結果の両方に効く', async () => {
+  const api = catalog(async () => ({ ok: true, json: async () => JSON.parse(source('data/catalog.json')) }));
+  for (const [order, catalogOrder, heading] of [['rank', 'popular', 'すぐに読める作品・人気順'], ['title', 'kana', 'すぐに読める作品・作品名順'], ['author', 'author', null]]) {
+    const orders = [];
+    const spy = { ...api, search: (query, options) => { orders.push(options.order); return api.search(query, options); } };
+    const app = reader(spy, { order });
+    app.api.seedWorks(JSON.parse(source('texts/index.json')));
+    app.element('works-search').value = '夏目漱石';
+    app.api.renderWorksList();
+    await flush();
+    app.api.renderWorksList();
+    const nodes = app.element('works-list').children;
+    const sections = nodes.filter((node) => node.className === 'works-section').map((node) => node.textContent);
+    if (heading) assert.ok(sections.some((text) => text.startsWith(heading)), order);
+    else assert.ok(sections.some((text) => text.startsWith('夏目漱石')), order); // 著者別は著者ごとの見出し
+    assert.deepEqual([...new Set(orders)], [catalogOrder]);
+    assert.ok(nodes.some((node) => node.className === 'catalog-item'));
+    assert.equal(nodes.some((node) => node.className === 'catalog-order'), false); // 検索結果の中に別の切り替えは置かない
+  }
+});
+
+test('例文は検索語を入れるとしまい、消すと戻す', () => {
+  const app = reader(catalog(async () => { throw Error('offline'); }));
+  app.element('works-search').value = '猫';
+  app.api.renderWorksList();
+  assert.equal(app.element('works-search-help').hidden, true);
+  app.element('works-search-clear').events.click();
+  assert.equal(app.element('works-search-help').hidden, false);
 });

@@ -37,6 +37,7 @@
   const worksDialog = document.getElementById('works-dialog');
   const worksSearch = document.getElementById('works-search');
   const worksSearchClear = document.getElementById('works-search-clear');
+  const worksSearchHelp = document.getElementById('works-search-help');
   const worksList = document.getElementById('works-list');
   const fileInput = document.getElementById('file-input');
   const progressEl = document.getElementById('progress');
@@ -504,11 +505,14 @@
 
   function renderWorksList() {
     worksSearchClear.hidden = !worksSearch.value;
+    // 例文は入力を始めたらしまい、一覧を 1 行広げる
+    worksSearchHelp.hidden = Boolean(worksSearch.value);
     const words = Catalog.terms(worksSearch.value);
     const matches = authorFilter === null
       ? (work) => Catalog.matches(work, words)
       : (work) => work.author === authorFilter;
-    const byAuthor = document.querySelector('input[name="works-order"]:checked').value === 'author';
+    // 並べ方は上の切り替え 1 つで、すぐに読める作品と青空文庫の検索結果の両方に効かせる
+    const order = worksOrder();
     const nodes = [];
 
     const shelf = books.filter(matches);
@@ -525,9 +529,13 @@
     if (!words.length) nodes.push(...authorShortcuts());
 
     const bundled = siteWorks.filter(matches);
-    if (bundled.length && !byAuthor) {
+    if (bundled.length && order === 'rank') {
       nodes.push(section('すぐに読める作品・人気順', bundled.length));
       for (const work of bundled) nodes.push(workButton(work.file, work, { showAuthor: true, rank: work.rank }));
+    } else if (bundled.length && order === 'title') {
+      nodes.push(section('すぐに読める作品・作品名順', bundled.length));
+      const sorted = [...bundled].sort((a, b) => titleSortKey(a).localeCompare(titleSortKey(b), 'ja'));
+      for (const work of sorted) nodes.push(workButton(work.file, work, { showAuthor: true }));
     } else if (bundled.length) {
       const authors = new Map();
       for (const work of bundled) {
@@ -542,8 +550,19 @@
       }
     }
 
-    nodes.push(...catalogNodes(words.length > 0));
+    nodes.push(...catalogNodes(words.length > 0, order));
     worksList.replaceChildren(...nodes);
+  }
+
+  // 作品名の読み。『春と修羅』〔雨ニモマケズ〕のような括弧は外して並べる
+  function titleSortKey(work) {
+    return (work.titleYomi || work.title).replace(/^[『「〔（(【［]+/, '');
+  }
+
+  // 並べ方：'rank'（人気順）・'author'（著者別）・'title'（作品名順）
+  function worksOrder() {
+    const value = document.querySelector('input[name="works-order"]:checked').value;
+    return value === 'author' || value === 'title' ? value : 'rank';
   }
 
   // ---- 青空文庫の全作品から探す（data/catalog.json） ----
@@ -561,7 +580,10 @@
   }
 
   // 目録（約 2.7MB）は、検索語が入るまで読み込まない
-  function catalogNodes(query) {
+  // 青空文庫の検索結果に使う並べ方（Catalog.search の order）
+  const CATALOG_ORDERS = { rank: 'popular', author: 'author', title: 'kana' };
+
+  function catalogNodes(query, order = 'rank') {
     if (!query) {
       return [note('作品名や著者名で検索すると、すぐに読める作品のほかに、青空文庫の全作品（約 1 万 8 千作品）からも探せます（zip をダウンロードして読みます）。', 'works-hint')];
     }
@@ -600,39 +622,14 @@
     // 収録作品と本棚にある作品は上に出ているので、ここでは除く
     const shown = new Set([...siteWorks.map((work) => work.workId), ...books.map((book) => book.workId)].filter(Boolean));
     const exclude = (work) => shown.has(work.workId);
-    const order = loadJSON('catalogOrder') === 'kana' ? 'kana' : 'popular';
-    const results = Catalog.search(worksSearch.value, { exclude, author: authorFilter, order });
+    const results = Catalog.search(worksSearch.value, { exclude, author: authorFilter, order: CATALOG_ORDERS[order] });
     const nodes = [section(authorFilter === null ? heading : heading + '・' + authorFilter + 'の作品', results.length)];
     if (!results.length) {
       nodes.push(note('「' + worksSearch.value + '」に当てはまる作品はありません。'));
       return nodes;
     }
-    nodes.push(catalogOrderSwitch(order), ...catalogResults(results));
+    nodes.push(...catalogResults(results));
     return nodes;
-  }
-
-  // 検索結果の並べ方（人気順・50音順）。選んだものを覚える
-  function catalogOrderSwitch(current) {
-    const group = document.createElement('div');
-    group.className = 'catalog-order';
-    group.setAttribute('role', 'group');
-    group.setAttribute('aria-label', '検索結果の並べ方');
-    for (const [value, label] of [['popular', '人気順'], ['kana', '50音順']]) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = label;
-      button.setAttribute('aria-pressed', String(value === current));
-      button.addEventListener('click', () => {
-        if (value === current) return;
-        saveJSON('catalogOrder', value);
-        catalogShown = CATALOG_PAGE;
-        const scrollTop = worksList.scrollTop;
-        renderWorksList();
-        worksList.scrollTop = scrollTop;
-      });
-      group.append(button);
-    }
-    return group;
   }
 
   function catalogResults(results) {
@@ -771,6 +768,7 @@
   for (const radio of document.querySelectorAll('input[name="works-order"]')) {
     radio.addEventListener('change', () => {
       saveJSON('worksOrder', radio.value);
+      catalogShown = CATALOG_PAGE;
       renderWorksList();
       worksList.scrollTop = 0;
     });
@@ -778,7 +776,7 @@
   // 並べ方は前回のものを使う
   {
     const order = loadJSON('worksOrder');
-    const radio = document.querySelector('input[name="works-order"][value="' + (order === 'author' ? 'author' : 'rank') + '"]');
+    const radio = document.querySelector('input[name="works-order"][value="' + (order === 'author' || order === 'title' ? order : 'rank') + '"]');
     radio.checked = true;
   }
 

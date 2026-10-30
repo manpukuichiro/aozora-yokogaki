@@ -80,6 +80,7 @@ const Catalog = (() => {
   // order が 'popular'（人気順）なら、アクセスランキングの順位がある作品を順位の順に先に出し、
   // 残りは作品名の完全一致、著者（「漱石」で夏目漱石の作品）、作品名の前方一致、途中一致の順に並べる。
   // 'kana'（50音順）なら、目録の並び（作品名の読みの順）のまま。
+  // 'author'（著者別）なら、著者名の読みの順（同じ著者の中は作品名の読みの順）。
   // author を指定すると、著者名がそれと一致する作品だけにする（作品名などに著者名を含む他の著者の作品は除く）
   function search(query, { exclude = () => false, author = null, order = 'popular' } = {}) {
     const words = terms(query);
@@ -99,8 +100,13 @@ const Catalog = (() => {
     }
     // sort は安定なので、同じ値の作品は目録の並びのまま
     if (order === 'popular') ranked.sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]));
+    else if (order === 'author') ranked.sort((a, b) => yomiOrder(a[2].authorYomi || a[2].author, b[2].authorYomi || b[2].author));
     return ranked.map(([, , work]) => work);
   }
+  function yomiOrder(a, b) {
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
   function get(workId) {
     return byId.get(workId) || null;
   }
