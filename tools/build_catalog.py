@@ -23,7 +23,12 @@ works の各要素は fields の順の配列:
     rank        青空文庫のアクセスランキングでの順位（ランキング外は 0）。検索結果の「人気順」に使う
 
 使い方の補足:
-    --ranking   順位に使うランキングのページ名（既定は fetch_popular.py と同じ 2022_xhtml）
+    --ranking       順位に使うランキングのページ名（既定は fetch_popular.py と同じ 2022_xhtml）
+    --authors-only  通信せず、今ある目録から著者一覧（data/authors.json）だけを作り直す
+
+あわせて、青空文庫での作品数が多い著者 100 人の一覧（data/authors.json）を作る。
+「作品を探す」の「著者から探す」は、ここから読み込むたびにランダムに選んで出す
+（選ぶ人を固定しないことで、選び方の偏りを避ける。目録 2MB 余りを読み込まずに済むよう別のファイルにする）。
 """
 
 import argparse
@@ -56,12 +61,47 @@ from fetch_popular import (  # noqa: E402  同じフォルダのスクリプト�
 OUT = ROOT / "data" / "catalog.json"
 CARDS = "https://www.aozora.gr.jp/cards/"
 FIELDS = ["id", "title", "titleYomi", "subtitle", "author", "authorYomi", "translator", "dir", "zip", "kana", "copyright", "rank"]
+AUTHORS_OUT = ROOT / "data" / "authors.json"
+AUTHORS_LIMIT = 100
+
+
+def single_author(name):
+    """著者欄が 1 人の名前か。複数の著者は「・」でつながる（例 泉鏡花・泉鏡太郎）が、
+    外国人の名前は「姓 名・名」の形で「・」を含む（例 アンデルセン ハンス・クリスチャン）"""
+    return " " not in name and "・" not in name or name.count(" ") == 1
+
+
+def top_authors(catalog, limit=AUTHORS_LIMIT):
+    """作品数の多い順（同数なら読みの順）に著者を limit 人選ぶ。共著の作品は数えない。"""
+    author_col, yomi_col = catalog["fields"].index("author"), catalog["fields"].index("authorYomi")
+    counts, yomi = {}, {}
+    for work in catalog["works"]:
+        name = work[author_col]
+        if name and single_author(name):
+            counts[name] = counts.get(name, 0) + 1
+            yomi.setdefault(name, work[yomi_col])
+    ranked = sorted(counts, key=lambda name: (-counts[name], yomi[name], name))[:limit]
+    return [{"name": name, "works": counts[name]} for name in ranked]
+
+
+def authors_data(catalog):
+    return {"source": "data/catalog.json", "generated": catalog.get("generated"), "authors": top_authors(catalog)}
+
+
+def write_authors(catalog):
+    data = authors_data(catalog)
+    AUTHORS_OUT.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    print(f"data/authors.json に作品数の多い著者 {len(data['authors'])} 人を書き出しました")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--ranking", default="2022_xhtml", help="順位に使うランキングのページ名（既定 2022_xhtml）")
+    parser.add_argument("--authors-only", action="store_true", help="通信せず、今ある目録から data/authors.json だけを作り直す")
     args = parser.parse_args()
+    if args.authors_only:
+        write_authors(json.loads(OUT.read_text(encoding="utf-8")))
+        return
 
     print(f"ランキング {args.ranking} を取得中…")
     ranks = {work_id: rank for rank, work_id in enumerate(ranked_work_ids(args.ranking, sleep=1), start=1)}
@@ -113,6 +153,7 @@ def main():
     with_zip = sum(1 for work in works if work[8])
     ranked = sum(1 for work in works if work[11])
     print(f"data/catalog.json に {len(works)} 作品（zip あり {with_zip}、順位あり {ranked}）を書き出しました（{OUT.stat().st_size // 1024} KB）")
+    write_authors(data)
 
 
 if __name__ == "__main__":

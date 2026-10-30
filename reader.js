@@ -84,14 +84,71 @@
     for (const [id, font] of Object.entries(FONTS)) fontSelect.append(new Option(font.label, id));
   }
 
-  // 選んだ太さがそのフォントにない場合は一番近い太さを使う（設定値自体は残し、フォントを戻したら復活させる）
+  // 端末のフォントにない太さは近い太さで表示されるため、見た目が同じになる段階がある。
+  // 太さごとに文字を描いて濃さを比べ、同じ見た目の太さをまとめる（フォントごとに 1 回だけ測る）。
+  // 返す Map は「太さ → 選択肢に出す太さ」。測れない環境（canvas がない等）では全部の太さを出す
+  const weightGroups = new Map();
+
+  function inkOf(context, family, weight) {
+    context.clearRect(0, 0, 400, 48);
+    context.font = weight + ' 32px ' + family;
+    context.fillText('永遠の吾輩は猫である', 0, 36);
+    const data = context.getImageData(0, 0, 400, 48).data;
+    let ink = 0;
+    for (let i = 3; i < data.length; i += 4) ink += data[i];
+    return ink;
+  }
+
+  function measureWeightGroups(font) {
+    const all = new Map(font.weights.map((w) => [w, w]));
+    let context = null;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 400;
+      canvas.height = 48;
+      context = typeof canvas.getContext === 'function' ? canvas.getContext('2d', { willReadFrequently: true }) : null;
+    } catch {
+      context = null;
+    }
+    if (!context) return all;
+    let inks;
+    try {
+      inks = font.weights.map((w) => inkOf(context, font.family, w));
+    } catch {
+      return all;
+    }
+    if (!inks.some((ink) => ink > 0)) return all;
+    // 隣り合う太さの濃さの差が 2% 未満なら同じ見た目とみなす（読み取りに雑音を混ぜるブラウザもあるため少し幅を持たせる）
+    const groups = [[font.weights[0]]];
+    for (let i = 1; i < font.weights.length; i++) {
+      if (Math.abs(inks[i] - inks[i - 1]) < Math.max(inks[i], inks[i - 1]) * 0.02) groups.at(-1).push(font.weights[i]);
+      else groups.push([font.weights[i]]);
+    }
+    // まとめた中から代表を 1 つ選ぶ：標準（400）を含めば 400、それ以外は標準から一番離れた太さ（太い側なら一番太い）
+    const result = new Map();
+    for (const group of groups) {
+      const pick = group.includes(400) ? 400 : group.reduce((a, b) => (Math.abs(b - 400) > Math.abs(a - 400) ? b : a));
+      for (const w of group) result.set(w, pick);
+    }
+    return result;
+  }
+
+  function weightGroupsOf(font) {
+    if (!weightGroups.has(font)) weightGroups.set(font, measureWeightGroups(font));
+    return weightGroups.get(font);
+  }
+
+  // 選んだ太さがそのフォントにない場合は一番近い太さを使い、見た目が同じ太さはその代表に読み替える
+  // （設定値自体は残し、フォントを戻したら復活させる）
   function currentWeight() {
-    const { weights } = currentFont();
-    return weights.reduce((best, w) => (Math.abs(w - settings.weight) < Math.abs(best - settings.weight) ? w : best));
+    const font = currentFont();
+    const nearest = font.weights.reduce((best, w) => (Math.abs(w - settings.weight) < Math.abs(best - settings.weight) ? w : best));
+    return weightGroupsOf(font).get(nearest);
   }
 
   function populateWeightSelect() {
-    const options = currentFont().weights.map((w) => new Option(WEIGHT_NAMES[w] + '（' + w + '）', String(w)));
+    const shown = [...new Set(weightGroupsOf(currentFont()).values())];
+    const options = shown.map((w) => new Option(WEIGHT_NAMES[w] + '（' + w + '）', String(w)));
     weightSelect.replaceChildren(...options);
     weightSelect.value = String(currentWeight());
   }
@@ -358,20 +415,45 @@
     return button;
   }
 
-  // 何を検索すればよいか迷ったとき用に、よく読まれている著者を押すだけで絞り込めるようにする。
-  // 名前は目録（data/catalog.json）の著者名と完全に一致させる（森鷗外は目録では「森鴎外」）
-  const AUTHOR_SHORTCUTS = ['芥川竜之介', '宮沢賢治', '太宰治', '夏目漱石', '谷崎潤一郎', '夢野久作',
-    '中島敦', '森鴎外', '江戸川乱歩', '坂口安吾', '泉鏡花', '樋口一葉', '与謝野晶子', '吉川英治'];
+  // 何を検索すればよいか迷ったとき用に、著者を押すだけで絞り込めるようにする。
+  // 選ぶ人の偏りを避けるため、青空文庫での作品数が多い 100 人（data/authors.json、tools/build_catalog.py が生成）から
+  // ページを読み込むたびにランダムに選ぶ。同じページを開いている間は選び直さない
+  const AUTHORS_URL = 'data/authors.json';
+  const AUTHOR_SHORTCUT_COUNT = 10;
+  let authorShortcutNames = [];
+  let authorShortcutPool = 0; // 候補の人数（見出しに出す）
+
+  async function loadAuthorShortcuts() {
+    try {
+      const response = await fetch(AUTHORS_URL, { cache: 'no-cache' });
+      if (!response.ok) throw new Error(response.status + ' ' + response.statusText);
+      const data = await response.json();
+      const names = (Array.isArray(data.authors) ? data.authors : []).map((author) => author && author.name)
+        .filter((name) => typeof name === 'string' && name);
+      // Fisher–Yates で並べ替えて先頭から取る（重複なし・順番もランダム）
+      for (let i = names.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [names[i], names[j]] = [names[j], names[i]];
+      }
+      authorShortcutPool = names.length;
+      authorShortcutNames = names.slice(0, AUTHOR_SHORTCUT_COUNT);
+    } catch (error) {
+      console.warn('著者の一覧（data/authors.json）を読み込めませんでした', error);
+      return;
+    }
+    if (worksDialog.open) renderWorksList();
+  }
 
   function authorShortcuts() {
+    if (!authorShortcutNames.length) return [];
     const list = document.createElement('div');
     list.className = 'author-shortcuts';
-    for (const author of AUTHOR_SHORTCUTS) {
+    for (const author of authorShortcutNames) {
       const button = authorLink(author);
       button.className = 'author-chip';
       list.append(button);
     }
-    return [section('著者から探す'), list];
+    return [section('著者から探す（作品の多い' + authorShortcutPool + '人からランダムに' + authorShortcutNames.length + '人）'), list];
   }
 
   function authorLink(author) {
@@ -442,7 +524,7 @@
 
     const bundled = siteWorks.filter(matches);
     if (bundled.length && !byAuthor) {
-      nodes.push(section('収録作品・人気順', bundled.length));
+      nodes.push(section('すぐに読める作品・人気順', bundled.length));
       for (const work of bundled) nodes.push(workButton(work.file, work, { showAuthor: true, rank: work.rank }));
     } else if (bundled.length) {
       const authors = new Map();
@@ -479,7 +561,7 @@
   // 目録（約 2.7MB）は、検索語が入るまで読み込まない
   function catalogNodes(query) {
     if (!query) {
-      return [note('作品名や著者名で検索すると、ここに収録されていない青空文庫の全作品（約 1 万 8 千作品）からも探せます。', 'works-hint')];
+      return [note('作品名や著者名で検索すると、すぐに読める作品のほかに、青空文庫の全作品（約 1 万 8 千作品）からも探せます（zip をダウンロードして読みます）。', 'works-hint')];
     }
     const heading = '青空文庫から探す';
     if (!Catalog.isLoaded()) {
@@ -1303,9 +1385,19 @@
     if (document.visibilityState === 'hidden') savePosition();
   });
 
-  for (const [button, input] of [['file-open', 'file-input'], ['file-open-narrow', 'file-input'], ['home-file-open', 'home-file-input']]) {
+  for (const [button, input] of [['file-open', 'file-input'], ['file-open-narrow', 'file-input'], ['home-file-open', 'home-file-input'],
+    ['works-file-open', 'works-file-input']]) {
     document.getElementById(button).addEventListener('click', () => document.getElementById(input).click());
   }
+  // 「作品を探す」でダウンロードした zip を、ポップアップを閉じて読み込む
+  document.getElementById('works-file-input').addEventListener('change', (event) => {
+    const input = event.target;
+    const files = Array.from(input.files);
+    input.value = '';
+    if (!files.length) return;
+    worksDialog.close();
+    importFiles(files);
+  });
   // ---- 起動 ----
 
   async function init() {
@@ -1313,6 +1405,7 @@
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
     populateFontSelect();
     applySettings();
+    loadAuthorShortcuts(); // 待たない（読み込めなければ「著者から探す」を出さないだけ）
     siteWorks = await loadCatalog();
     await refreshLibrary();
 

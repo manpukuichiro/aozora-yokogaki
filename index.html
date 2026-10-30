@@ -129,10 +129,11 @@
         <label><input type="radio" name="works-order" value="rank" checked>人気順</label>
         <label><input type="radio" name="works-order" value="author">著者別</label>
       </div>
+      <button type="button" class="file-button" id="works-file-open"><span>DLしたファイルを</span><span>開く…</span></button><input type="file" id="works-file-input" accept=".txt,.zip,text/plain,application/zip" multiple hidden>
     </div>
     <div class="works-list" id="works-list"></div>
     <p class="works-note">
-      収録作品は、<a href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>の 2022 年アクセスランキング（XHTML 版）の上位から、著作権の消滅した作品を選んでいます。ほかの作品は、図書カードから zip をダウンロードし、「ファイルを開く…」で選ぶか、パソコンでは画面にドラッグ＆ドロップすると読めます。
+      「すぐに読める作品」は、このサイトに入っている作品で、<a href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>の 2022 年アクセスランキング（XHTML 版）の上位から、著作権の消滅した作品を選んでいます。ほかの作品は、図書カードから zip をダウンロードし、上の「DLしたファイルを開く…」で選ぶか、パソコンでは画面にドラッグ＆ドロップすると読めます。
     </p>
   </dialog>
 
@@ -184,9 +185,10 @@
       </section>
 
       <section class="home-section" aria-labelledby="home-popular-title">
-        <h2 id="home-popular-title">収録作品から</h2>
+        <h2 id="home-popular-title">すぐに読める作品</h2>
+        <p class="home-note">このサイトに入っていて、ダウンロードせずにすぐ読める作品です（青空文庫の人気順）。</p>
         <div class="home-works" id="home-popular"></div>
-        <p class="home-more"><button type="button" class="text-button" id="home-all">収録作品をすべて見る</button></p>
+        <p class="home-more"><button type="button" class="text-button" id="home-all">すぐに読める作品をすべて見る</button></p>
       </section>
 
       <section class="home-section" aria-labelledby="home-howto-title">
@@ -197,9 +199,9 @@
             <p>画面上部の作品名を押すと「作品を探す」が開きます。人気順・著者別に並べ替えたり、作品名・著者名で検索したりできます（ひらがなでも探せます）。</p>
           </li>
           <li>
-            <h3>収録されていない作品を読む</h3>
+            <h3>青空文庫のほかの作品を読む</h3>
             <p>
-              上の検索欄や「作品を探す」で検索すると、ここに収録されていない青空文庫の作品も見つかります。「zip をダウンロード」で青空文庫からテキストを保存し、「ファイルを開く…」で選ぶか、パソコンではこの画面にドラッグ＆ドロップすれば読めます（展開は不要です）。「zip をダウンロード」を押すと、その場に「開く…」ボタンが出ます。スマホ・タブレットでは、ダウンロードした zip は「ファイル」アプリの「ダウンロード」フォルダ（Android ではダウンロード フォルダ）に保存されるので、「開く…」からそれを選びます。読み込んだ作品は「本棚」に残り、次からは「作品を探す」の「本棚」から開けます。
+              上の検索欄や「作品を探す」で検索すると、「すぐに読める作品」のほかに、青空文庫の全作品から見つかります。「zip をダウンロード」で青空文庫からテキストを保存し、「ファイルを開く…」で選ぶか、パソコンではこの画面にドラッグ＆ドロップすれば読めます（展開は不要です）。「zip をダウンロード」を押すと、その場に「開く…」ボタンが出ます。スマホ・タブレットでは、ダウンロードした zip は「ファイル」アプリの「ダウンロード」フォルダ（Android ではダウンロード フォルダ）に保存されるので、「開く…」からそれを選びます。読み込んだ作品は「本棚」に残り、次からは「作品を探す」の「本棚」から開けます。
             </p>
           </li>
           <li>
@@ -243,13 +245,13 @@
       <section class="home-section" aria-labelledby="home-about-title">
         <h2 id="home-about-title">このサイトについて</h2>
         <dl class="home-facts">
-          <dt>収録作品</dt>
+          <dt>すぐに読める作品</dt>
           <dd>
-            青空文庫の 2022 年アクセスランキング上位から、日本の著作権情報を基に、作品と関係者全員の著作権フラグが「なし」の <span id="home-count">100</span> 作品を、青空文庫のテキストのまま収録しています。本文の末尾に、底本と入力・校正をされた方の情報があります。
+            青空文庫の 2022 年アクセスランキング上位から、日本の著作権情報を基に、作品と関係者全員の著作権フラグが「なし」の <span id="home-count">100</span> 作品を、青空文庫のテキストのままこのサイトに収録しています。ダウンロードせずにすぐ読めます。本文の末尾に、底本と入力・校正をされた方の情報があります。
           </dd>
           <dt>出典</dt>
           <dd>
-            本文は<a href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>で公開されているテキストファイルです。利用は<a href="https://www.aozora.gr.jp/guide/kijyunn.html" target="_blank" rel="noopener">青空文庫収録ファイルの取り扱い規準</a>に従っています。収録作品を開いているときは、画面上部の「作品情報」から作品ごとの青空文庫のページを開けます。
+            本文は<a href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>で公開されているテキストファイルです。利用は<a href="https://www.aozora.gr.jp/guide/kijyunn.html" target="_blank" rel="noopener">青空文庫収録ファイルの取り扱い規準</a>に従っています。「すぐに読める作品」を開いているときは、画面上部の「作品情報」から作品ごとの青空文庫のページを開けます。
           </dd>
           <dt>書誌データの利用条件</dt>
           <dd>青空文庫の<a href="https://www.aozora.gr.jp/index_pages/person_all.html">作品一覧</a>を基に、項目の抽出・作品の選定・JSON 化を行っています。書誌データは <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> で提供されています。本文とは利用条件が異なります。海外では著作権の保護状況が異なる場合があります。<a href="NOTICE.html">出典・権利・通信について</a>もご覧ください。</dd>
@@ -259,7 +261,7 @@
           <dd>ルビ、傍点・傍線、見出し（窓見出し・同行見出しを含む）、字下げ・地付き、太字・斜体、文字の大小、割り注、罫囲み、外字の注記など。</dd>
           <dt>プライバシー</dt>
           <dd>
-            読み込んだ本文をアップロードする機能はありません。本文・読書位置・設定はこのブラウザに保存します。サイトの表示時には配信元と通信し、GitHub Pages では IP アドレス等のアクセスログが記録されます。書体は端末に入っているフォントを使い、外部からフォントは読み込みません。収録作品の指定は URL に含まれます。本棚の指定はサーバーへ送信されない # 以降に記録しますが、URL の共有や閲覧履歴には残ります。
+            読み込んだ本文をアップロードする機能はありません。本文・読書位置・設定はこのブラウザに保存します。サイトの表示時には配信元と通信し、GitHub Pages では IP アドレス等のアクセスログが記録されます。書体は端末に入っているフォントを使い、外部からフォントは読み込みません。「すぐに読める作品」のどれを開いているかは URL に含まれます。本棚の指定はサーバーへ送信されない # 以降に記録しますが、URL の共有や閲覧履歴には残ります。
           </dd>
           <dt>動作環境</dt>
           <dd>パソコン（Chrome・Edge・Firefox・Safari）、スマホ・タブレット（iPhone・iPad の Safari、Android の Chrome）の最新版を想定しています。</dd>

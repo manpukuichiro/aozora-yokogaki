@@ -76,7 +76,7 @@ function reader(api, extra = {}) {
   };
   const storage = new Map();
   const document = {
-    getElementById: element, createElement: () => new Element(), createDocumentFragment: () => new Element(),
+    getElementById: element, createElement: extra.createElement || (() => new Element()), createDocumentFragment: () => new Element(),
     documentElement: Object.assign(new Element(), { scrollHeight: 2000 }),
     querySelector: () => ({ value: 'rank' }), querySelectorAll: () => [],
     fonts: { addEventListener() {}, ready: Promise.resolve() }, addEventListener() {},
@@ -87,14 +87,15 @@ function reader(api, extra = {}) {
     location: { href: 'http://localhost/' }, history: { replaceState() {} }, URL, URLSearchParams, TextEncoder,
     localStorage: { getItem: (key) => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) },
     ResizeObserver: class { observe() {} }, IntersectionObserver: class { observe() {} disconnect() {} },
+    Option: class { constructor(text, value) { this.textContent = text; this.value = value; } },
     clearTimeout, setTimeout, ...extra,
   });
   // 起動時のI/Oだけを省き、画面のイベントハンドラを含めた本体を実行する。
   vm.runInContext(source('reader.js').replace('  init();', `
-    globalThis.api = { catalogNodes, renderWorksList, selectWork, importFiles, openText, renderHome, openWorks,
-      authorShortcuts: [...AUTHOR_SHORTCUTS],
+    globalThis.api = { catalogNodes, renderWorksList, selectWork, importFiles, openText, renderHome, openWorks, loadAuthorShortcuts,
       seedWorks: (works, shelf = []) => { siteWorks = works; books = shelf; },
       seed: (key, items) => { currentKey = key; paragraphs = items; },
+      weightChoices: (weight) => { settings.weight = weight; populateWeightSelect(); return { options: [...weightSelect.children.map((o) => Number(o.value))], current: currentWeight() }; },
       state: () => ({ catalogPending, catalogFailed }) };
   `), context);
   element('works-dialog').open = true;
@@ -138,25 +139,63 @@ const listed = (app) => app.element('works-list').children.filter((node) => node
 const catalogHeading = (app) => app.element('works-list').children
   .find((node) => node.className === 'works-section' && node.textContent.startsWith('青空文庫から探す')).textContent;
 
-test('「著者から探す」の著者は目録の著者名と一致し、押すとその著者に絞り込む', async () => {
+const authorsFile = async (url) => {
+  assert.equal(url, 'data/authors.json');
+  return { ok: true, json: async () => JSON.parse(source('data/authors.json')) };
+};
+const chipNames = (app) => {
+  const chips = app.element('works-list').children.find((node) => node.className === 'author-shortcuts');
+  return chips ? chips.children.map((chip) => chip.textContent) : [];
+};
+
+test('著者の候補は作品数の多い100人で、名前と作品数が目録と一致する', () => {
   const data = JSON.parse(source('data/catalog.json'));
   const authorColumn = data.fields.indexOf('author');
-  const authors = new Set(data.works.map((row) => row[authorColumn]));
-  const app = reader(catalog(async () => ({ ok: true, json: async () => data })));
-  const shortcuts = [...app.api.authorShortcuts];
-  assert.ok(shortcuts.length > 0);
+  const counts = new Map();
+  for (const row of data.works) counts.set(row[authorColumn], (counts.get(row[authorColumn]) || 0) + 1);
+  const pool = JSON.parse(source('data/authors.json')).authors;
+  assert.equal(pool.length, 100);
+  assert.equal(new Set(pool.map(({ name }) => name)).size, 100);
   // 「森鷗外」のように目録と違う字で書くと、押しても 0 件になる
-  for (const name of shortcuts) assert.ok(authors.has(name), '目録にない著者名: ' + name);
+  for (const { name, works } of pool) assert.equal(counts.get(name), works, name);
+  for (let i = 1; i < pool.length; i++) assert.ok(pool[i - 1].works >= pool[i].works);
+});
+
+test('「著者から探す」は候補から10人をランダムに選び、ページを開いている間は選び直さない', async () => {
+  const pool = new Set(JSON.parse(source('data/authors.json')).authors.map(({ name }) => name));
+  const picks = [];
+  for (let i = 0; i < 3; i++) {
+    const app = reader(catalog(async () => ({ ok: true, json: async () => JSON.parse(source('data/catalog.json')) })), { fetch: authorsFile });
+    app.api.renderWorksList();
+    assert.deepEqual(chipNames(app), []); // 読み込むまでは出さない
+    await app.api.loadAuthorShortcuts(); // 開いているポップアップは読み込み後に描き直す
+    const names = chipNames(app);
+    assert.equal(names.length, 10);
+    assert.equal(new Set(names).size, 10);
+    assert.ok(names.every((name) => pool.has(name)));
+    // 描き直し・開き直し・絞り込みの後も同じ顔ぶれと順番
+    app.api.renderWorksList();
+    app.api.openWorks('');
+    assert.deepEqual(chipNames(app), names);
+    app.element('works-list').children.find((node) => node.className === 'author-shortcuts').children[0].events.click();
+    await flush();
+    assert.ok(catalogHeading(app).startsWith('青空文庫から探す・' + names[0] + 'の作品（'));
+    assert.ok(listed(app).length > 0);
+    assert.ok(listed(app).every(({ link, author }) => !link && author === names[0]));
+    app.api.openWorks('');
+    assert.deepEqual(chipNames(app), names);
+    picks.push(names.join());
+  }
+  // ページを読み込み直すと選び直す（3回とも同じになる確率は無視できるほど小さい）
+  assert.ok(new Set(picks).size > 1);
+});
+
+test('著者の一覧を読み込めなくても「著者から探す」を出さないだけで一覧は表示する', async () => {
+  const app = reader({ terms: () => [], matches: () => true }, { fetch: async () => { throw Error('offline'); } });
+  await app.api.loadAuthorShortcuts();
   app.api.renderWorksList();
-  const chips = app.element('works-list').children.find((node) => node.className === 'author-shortcuts');
-  assert.deepEqual(chips.children.map((chip) => chip.textContent), shortcuts);
-  chips.children.find((chip) => chip.textContent === '森鴎外').events.click();
-  await flush();
-  assert.equal(app.element('works-search').value, '森鴎外');
-  assert.match(catalogHeading(app), /・森鴎外の作品（\d+）$/);
-  const works = listed(app);
-  assert.ok(works.length > 0);
-  assert.ok(works.every(({ link, author }) => !link && author === '森鴎外'));
+  assert.deepEqual(chipNames(app), []);
+  assert.ok(app.element('works-list').children.length > 0);
 });
 
 test('著者名を押すとその著者だけに絞り、検索欄の書き換えや開き直しで解除する', async () => {
@@ -373,4 +412,35 @@ test('本棚全件表示と削除：キャンセル・失敗は保持し、読�
   assert.equal(app.element('toc-open').textContent, '目次なし');
   assert.equal(app.element('home-resume-section').hidden, true);
   assert.equal(app.element('works-list').children.some((node) => node.className === 'shelf-item'), false);
+});
+
+// 太さごとの文字の濃さを決めておく偽の canvas（Windows の游明朝を測ったときの比率：500〜700 は同じ Demibold）
+const inkCanvas = (inks) => () => ({
+  getContext: () => ({
+    clearRect() {}, fillText() {},
+    set font(value) { this.weight = parseInt(value, 10); },
+    getImageData() { return { data: [0, 0, 0, inks[this.weight]] }; },
+  }),
+});
+
+// vm 内で作った配列はそのままだと deepEqual で別物扱いになるので、こちらの配列に移す
+const choices = (app, weight) => {
+  const { options, current } = app.api.weightChoices(weight);
+  return { options: [...options], current };
+};
+
+test('太さは見た目が変わる段階だけを選択肢に出し、同じ見た目の太さは代表に読み替える', () => {
+  const app = reader(catalog(async () => ({})), { createElement: inkCanvas({ 300: 545, 400: 658, 500: 905, 600: 908, 700: 905 }) });
+  assert.deepEqual(choices(app, 400), { options: [300, 400, 700], current: 400 });
+  assert.equal(choices(app, 500).current, 700); // 500 は Demibold で表示されるので「太」に
+  assert.equal(choices(app, 650).current, 700);
+  assert.equal(choices(app, 200).current, 300);
+});
+
+test('太さを測れない環境では全部の太さを選択肢に出す', () => {
+  const noCanvas = reader(catalog(async () => ({})));
+  assert.deepEqual(choices(noCanvas, 500), { options: [300, 400, 500, 600, 700], current: 500 });
+  // 何も描けない（濃さがすべて 0）ときも同じ
+  const blank = reader(catalog(async () => ({})), { createElement: inkCanvas({ 300: 0, 400: 0, 500: 0, 600: 0, 700: 0 }) });
+  assert.deepEqual(choices(blank, 500).options, [300, 400, 500, 600, 700]);
 });

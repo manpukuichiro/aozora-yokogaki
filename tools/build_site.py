@@ -9,6 +9,8 @@ import re
 import shutil
 import subprocess
 
+from build_catalog import authors_data
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 RUNTIME = ['index.html', 'style.css', 'reader.js', 'reader-data.js', 'library.js', 'aozora.js', 'catalog.js', 'NOTICE.html', 'LICENSE', '.nojekyll',
            'favicon.svg', 'favicon.ico', 'apple-touch-icon.png',
@@ -95,6 +97,9 @@ def build(destination):
     subprocess.run(['node', 'dev/aozora.test.js'], cwd=ROOT, check=True)
     entries = json.loads((ROOT / 'texts/index.json').read_text(encoding='utf-8'))
     catalog = check_catalog(ROOT / 'data/catalog.json')
+    # 「著者から探す」の候補が今の目録から作ったものか（目録だけ作り直して古いままになっていないか）
+    if json.loads((ROOT / 'data/authors.json').read_text(encoding='utf-8')) != authors_data(catalog):
+        raise ValueError('data/authors.json が目録と合いません。python tools/build_catalog.py --authors-only で作り直してください')
     id_col, copyright_col = catalog['fields'].index('id'), catalog['fields'].index('copyright')
     rights = {str(w[id_col]).zfill(6): w[copyright_col] for w in catalog['works']}
     names = set()
@@ -109,7 +114,7 @@ def build(destination):
         digest = hashlib.sha256(content).hexdigest()
         if work.get('sha256') and work['sha256'] != digest:
             raise ValueError('記録した本文のハッシュと一致しません: ' + name)
-    files = RUNTIME + ['data/catalog.json', 'texts/index.json'] + ['texts/' + name for name in sorted(names)]
+    files = RUNTIME + ['data/catalog.json', 'data/authors.json', 'texts/index.json'] + ['texts/' + name for name in sorted(names)]
     for relative in files:
         if not (ROOT / relative).is_file():
             raise ValueError('必要なファイルがありません: ' + relative)

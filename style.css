@@ -234,6 +234,25 @@ body {
   flex-basis: 100%;
 }
 
+/* 並べ方の切り替えの右端に置く */
+#works-file-open {
+  margin-left: auto;
+}
+
+/* スマホでは 2 行にして、並べ方の切り替えと同じ行に収める */
+@media (max-width: 480px) {
+  #works-file-open {
+    flex-wrap: wrap;
+    justify-content: center;
+    width: min-content;
+    line-height: 1.3;
+  }
+
+  #works-file-open span {
+    white-space: nowrap;
+  }
+}
+
 #works-order[hidden],
 #works-show-all[hidden] {
   display: none;
@@ -908,6 +927,11 @@ button:disabled {
   margin: -4px 0 10px;
   color: var(--muted);
   font-size: 13px;
+}
+
+/* ボタンの下の説明は、見出しの下の説明（上に詰める）よりも離して置く */
+.home-actions + .home-note {
+  margin-top: 12px;
 }
 
 /* 続きから読む */
