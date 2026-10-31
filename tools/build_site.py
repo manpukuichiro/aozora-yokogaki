@@ -12,7 +12,7 @@ import subprocess
 from build_catalog import authors_data
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-RUNTIME = ['index.html', 'style.css', 'reader.js', 'reader-data.js', 'library.js', 'aozora.js', 'catalog.js', 'NOTICE.html', 'LICENSE', '.nojekyll',
+RUNTIME = ['index.html', 'style.css', 'reader.js', 'sw.js', 'reader-data.js', 'library.js', 'aozora.js', 'catalog.js', 'NOTICE.html', 'LICENSE', '.nojekyll',
            'favicon.svg', 'favicon.ico', 'apple-touch-icon.png',
            # Google Search Console の所有者確認（URL プレフィックス）。消すと確認が外れる
            'google72cd6a576759ab5e.html']
@@ -93,7 +93,7 @@ def build(destination):
     if destination.exists():
         raise ValueError('既存フォルダーには書き込みません。新しい出力先を指定してください')
     # 公開候補の生成を、回帰テストの成功に結び付ける。
-    subprocess.run(['node', '--test', 'dev/reader.test.js', 'dev/safety.test.js'], cwd=ROOT, check=True)
+    subprocess.run(['node', '--test', 'dev/reader.test.js', 'dev/safety.test.js', 'dev/sw.test.js'], cwd=ROOT, check=True)
     subprocess.run(['node', 'dev/aozora.test.js'], cwd=ROOT, check=True)
     entries = json.loads((ROOT / 'texts/index.json').read_text(encoding='utf-8'))
     catalog = check_catalog(ROOT / 'data/catalog.json')

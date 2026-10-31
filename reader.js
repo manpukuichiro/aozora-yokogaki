@@ -340,7 +340,13 @@
       const text = decode(await response.arrayBuffer());
       if (token === loadToken) openText('site:' + file, title || file, text);
     } catch (error) {
-      if (token === loadToken) showStatus('本文を読み込めませんでした（' + file + '）: ' + error.message, true);
+      if (token !== loadToken) return;
+      // 通信できないとき（fetch が TypeError で失敗する）は、読める作品があることも伝える
+      if (error instanceof TypeError) {
+        showStatus('通信できないため、本文を読み込めませんでした（' + file + '）。一度開いた作品と本棚の作品は、通信できないときにも読めます。', true);
+      } else {
+        showStatus('本文を読み込めませんでした（' + file + '）: ' + error.message, true);
+      }
     }
   }
 
@@ -1777,4 +1783,14 @@
   }
 
   init();
+
+  // 一度開いたページと作品を、通信できないときにも開けるようにする（sw.js）。
+  // 本文の表示を先に済ませたいので、ページを読み終えてから登録する
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {
+        // 使えない環境（プライベート閲覧など）では、これまでどおり通信して読む
+      });
+    });
+  }
 })();
