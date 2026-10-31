@@ -26,7 +26,7 @@
           <span class="work-button-label" id="current-title">作品を選ぶ</span>
           <span class="work-change">作品を変更</span>
         </button>
-        <button type="button" id="toc-open" aria-haspopup="dialog" aria-controls="toc-dialog" disabled>目次なし</button>
+        <button type="button" id="toc-open" aria-haspopup="dialog" aria-controls="toc-dialog" disabled hidden>目次なし</button>
       </div>
       <!-- wide-only：幅の狭い画面ではツールバーから外し、表示設定の「その他」に同じものを出す -->
       <button type="button" class="file-button wide-only" id="file-open">ファイルを開く…</button><input type="file" id="file-input" accept=".txt,.zip,text/plain,application/zip" multiple hidden>
@@ -36,14 +36,7 @@
       <a class="site-link wide-only" href="https://www.aozora.gr.jp/" target="_blank" rel="noopener" title="青空文庫の公式サイトを新しいタブで開く">青空文庫</a>
     </div>
     <div class="settings" id="settings" hidden>
-      <section class="settings-group narrow-only" aria-labelledby="settings-more">
-        <h3 class="settings-heading" id="settings-more">その他</h3>
-        <div class="setting-actions">
-          <button type="button" class="file-button" id="file-open-narrow">ファイルを開く…</button>
-          <a class="site-link" id="card-link-narrow" target="_blank" rel="noopener" hidden>作品情報</a>
-          <a class="site-link" href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>
-        </div>
-      </section>
+      <!-- よく使う順（文字の大きさ→配色とルビ→書体→その他）に並べる -->
       <section class="settings-group" aria-labelledby="settings-text">
         <h3 class="settings-heading" id="settings-text">文字と行</h3>
         <div class="setting">
@@ -72,6 +65,29 @@
         </div>
       </section>
 
+      <section class="settings-group" aria-labelledby="settings-display">
+        <h3 class="settings-heading" id="settings-display">表示</h3>
+        <div class="setting">
+          <label class="setting-label" for="theme-select">配色</label>
+          <select id="theme-select">
+            <option value="auto">端末に合わせる</option>
+            <option value="light">白</option>
+            <option value="sepia">セピア</option>
+            <option value="dark">黒</option>
+          </select>
+        </div>
+        <div class="setting">
+          <label class="setting-label" for="ruby-select">ルビ</label>
+          <select id="ruby-select">
+            <option value="on">表示</option>
+            <option value="off">非表示</option>
+          </select>
+        </div>
+        <div class="setting-actions">
+          <button type="button" class="text-button" id="reset-settings">表示設定を元に戻す</button>
+        </div>
+      </section>
+
       <section class="settings-group" aria-labelledby="settings-font">
         <h3 class="settings-heading" id="settings-font">フォント</h3>
         <div class="setting">
@@ -84,28 +100,17 @@
         </div>
       </section>
 
-      <section class="settings-group" aria-labelledby="settings-display">
-        <h3 class="settings-heading" id="settings-display">表示</h3>
-        <div class="setting">
-          <label class="setting-label" for="ruby-select">ルビ</label>
-          <select id="ruby-select">
-            <option value="on">表示</option>
-            <option value="off">非表示</option>
-          </select>
-        </div>
-        <div class="setting">
-          <label class="setting-label" for="theme-select">配色</label>
-          <select id="theme-select">
-            <option value="auto">端末に合わせる</option>
-            <option value="light">白</option>
-            <option value="sepia">セピア</option>
-            <option value="dark">黒</option>
-          </select>
-        </div>
+      <section class="settings-group narrow-only" aria-labelledby="settings-more">
+        <h3 class="settings-heading" id="settings-more">その他</h3>
         <div class="setting-actions">
-          <button type="button" class="text-button" id="reset-settings">表示設定を元に戻す</button>
+          <button type="button" class="file-button" id="file-open-narrow">ファイルを開く…</button>
+          <a class="site-link" id="card-link-narrow" target="_blank" rel="noopener" hidden>作品情報</a>
+          <a class="site-link" href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>
         </div>
       </section>
+      <div class="settings-close-row">
+        <button type="button" class="settings-close" id="settings-close">閉じる</button>
+      </div>
     </div>
   </header>
 
@@ -164,13 +169,11 @@
       <header class="home-hero">
         <h1 class="home-title" id="home-title">横書き青空文庫ブラウザ版</h1>
         <p class="home-lead">
-          著作権の切れた名作を集めた<a href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>の作品を、パソコンやタブレット、スマホの画面で読みやすい横書きで表示するリーダーです。ルビ・傍点・見出しなどの青空文庫の記法に対応し、文字の大きさや行間、書体は好みに合わせて変えられます。
+          著作権の切れた名作を集めた<a href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>の作品を、スマホやパソコンで読みやすい横書きで読めます。ルビにも対応し、文字の大きさや配色は好みに合わせて変えられます。
         </p>
         <div class="home-actions">
           <button type="button" class="primary" id="home-browse">作品を探す</button>
-          <button type="button" class="file-button" id="home-file-open">ファイルを開く…</button><input type="file" id="home-file-input" accept=".txt,.zip,text/plain,application/zip" multiple hidden>
         </div>
-        <p class="home-note">青空文庫の ZIP・テキストに対応。1 ファイル・展開後・UTF-8 変換後の本文とも 5 MiB、30,000 行まで。一度に 20 ファイルまで開けます。ZIP が開けない場合は端末で展開して .txt を選んでください。</p>
         <form class="home-search" id="home-search" role="search">
           <label for="home-search-input">青空文庫の全作品（約 1 万 8 千作品）から探す</label>
           <div class="home-search-row">
@@ -179,21 +182,23 @@
           </div>
           <p class="search-help" id="home-search-help">例：猫 漱石　空白で区切って絞り込めます。</p>
         </form>
+        <!-- 手元にファイルがある人向けなので、目立たない文字のボタンにする -->
+        <p class="home-file"><button type="button" class="text-button" id="home-file-open">ダウンロード済みのファイルを開く…</button><input type="file" id="home-file-input" accept=".txt,.zip,text/plain,application/zip" multiple hidden></p>
         <p class="home-notice" id="home-notice" hidden></p>
       </header>
-
-      <section class="home-section" id="home-shelf-section" aria-labelledby="home-shelf-title" hidden>
-        <h2 id="home-shelf-title">本棚</h2>
-        <p class="home-note">このブラウザに保存されます。別の端末とは共有されません。</p>
-        <div class="home-works" id="home-shelf"></div>
-        <p class="home-more"><button type="button" class="text-button" id="home-shelf-all">本棚をすべて見る</button></p>
-      </section>
 
       <section class="home-section" aria-labelledby="home-popular-title">
         <h2 id="home-popular-title">すぐに読める作品</h2>
         <p class="home-note">このサイトに入っていて、ダウンロードせずにすぐ読める作品です（青空文庫の人気順）。</p>
         <div class="home-works" id="home-popular"></div>
         <p class="home-more"><button type="button" class="text-button" id="home-all">すぐに読める作品をすべて見る</button></p>
+      </section>
+
+      <section class="home-section" id="home-shelf-section" aria-labelledby="home-shelf-title" hidden>
+        <h2 id="home-shelf-title">本棚</h2>
+        <p class="home-note">このブラウザに保存されます。別の端末とは共有されません。</p>
+        <div class="home-works" id="home-shelf"></div>
+        <p class="home-more"><button type="button" class="text-button" id="home-shelf-all">本棚をすべて見る</button></p>
       </section>
 
       <section class="home-section" aria-labelledby="home-howto-title">
@@ -206,7 +211,7 @@
           <li>
             <h3>青空文庫のほかの作品を読む</h3>
             <p>
-              上の検索欄や「作品を探す」で検索すると、「すぐに読める作品」のほかに、青空文庫の全作品から見つかります。「① ZIPをダウンロード」で青空文庫からテキストを保存すると、その場に「② 保存したZIPを開く」ボタンが出るので、保存した zip を選べば読めます（解凍は不要です）。「ファイルを開く…」で選んだり、パソコンではこの画面にドラッグ＆ドロップしたりしても読めます。保存先は、パソコンでは多くの場合「ダウンロード」フォルダ、スマホ・タブレットでは「ファイル」アプリの「ダウンロード」です。読み込んだ作品は「本棚」に残り、次からは「作品を探す」の「本棚」から開けます。
+              上の検索欄や「作品を探す」で検索すると、「すぐに読める作品」のほかに、青空文庫の全作品から見つかります。「① ZIPをダウンロード」で青空文庫からテキストを保存すると、その場に「② 保存したZIPを開く」ボタンが出るので、保存した zip を選べば読めます（解凍は不要です）。「ダウンロード済みのファイルを開く…」で選んだり、パソコンではこの画面にドラッグ＆ドロップしたりしても読めます。保存先は、パソコンでは多くの場合「ダウンロード」フォルダ、スマホ・タブレットでは「ファイル」アプリの「ダウンロード」です。読み込んだ作品は「本棚」に残り、次からは「作品を探す」の「本棚」から開けます。
             </p>
           </li>
           <li>
@@ -254,6 +259,8 @@
           <dd>
             青空文庫の 2022 年アクセスランキング上位から、日本の著作権情報を基に、作品と関係者全員の著作権フラグが「なし」の <span id="home-count">277</span> 作品を、青空文庫のテキストのままこのサイトに収録しています。ダウンロードせずにすぐ読めます。本文の末尾に、底本と入力・校正をされた方の情報があります。
           </dd>
+          <dt>開けるファイル</dt>
+          <dd>青空文庫の zip とテキストファイル（.txt）を開けます。1 ファイルは 5 MiB・30,000 行まで（zip は展開後、文字コードを変換した後の大きさで数えます）、一度に 20 ファイルまでです。zip が開けないときは、端末で展開して .txt を選んでください。</dd>
           <dt>出典</dt>
           <dd>
             本文は<a href="https://www.aozora.gr.jp/" target="_blank" rel="noopener">青空文庫</a>で公開されているテキストファイルです。利用は<a href="https://www.aozora.gr.jp/guide/kijyunn.html" target="_blank" rel="noopener">青空文庫収録ファイルの取り扱い規準</a>に従っています。「すぐに読める作品」を開いているときは、画面上部の「作品情報」から作品ごとの青空文庫のページを開けます。

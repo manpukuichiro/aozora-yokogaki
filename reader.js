@@ -11,8 +11,8 @@
 
   const DEFAULTS = { fontSize: 18, lineHeight: 1.9, measure: 36, font: 'mincho', weight: 400, ruby: 'on', theme: 'auto' };
   const STEPS = {
-    fontSize: { step: 1, min: 12, max: 32, format: (v) => v + 'px' },
-    lineHeight: { step: 0.1, min: 1.3, max: 2.8, format: (v) => v.toFixed(1) },
+    fontSize: { step: 1, min: 12, max: 32, format: (v) => levelName(v - DEFAULTS.fontSize, ['小', 'やや小', '標準', 'やや大', '大', '特大']) },
+    lineHeight: { step: 0.1, min: 1.3, max: 2.8, format: (v) => levelName(Math.round((v - DEFAULTS.lineHeight) * 10), ['狭い', 'やや狭い', '標準', 'やや広い', '広い', 'とても広い']) },
     measure: { step: 2, min: 20, max: 60, format: (v) => v + '字' },
   };
 
@@ -25,6 +25,12 @@
     mincho: { label: '明朝', family: MINCHO_FALLBACK, weights: [300, 400, 500, 600, 700] },
     gothic: { label: 'ゴシック', family: GOTHIC_FALLBACK, weights: [300, 400, 500, 600, 700] },
   };
+  // 文字サイズと行間は、数値ではなく標準からの段数を言葉で示す（細かい違いは －／＋ の横の目盛りで見える）
+  function levelName(diff, [smallest, smaller, normal, larger, large, largest]) {
+    if (diff === 0) return normal;
+    if (diff < 0) return diff >= -2 ? smaller : smallest;
+    return diff <= 2 ? larger : diff <= 6 ? large : largest;
+  }
   const WEIGHT_NAMES = { 100: '極細', 200: '細', 300: 'やや細', 400: '標準', 500: '中', 600: 'やや太', 700: '太', 800: '極太', 900: '最も太い' };
 
   const root = document.documentElement;
@@ -150,7 +156,7 @@
 
   function populateWeightSelect() {
     const shown = [...new Set(weightGroupsOf(currentFont()).values())];
-    const options = shown.map((w) => new Option(WEIGHT_NAMES[w] + '（' + w + '）', String(w)));
+    const options = shown.map((w) => new Option(WEIGHT_NAMES[w], String(w)));
     weightSelect.replaceChildren(...options);
     weightSelect.value = String(currentWeight());
   }
@@ -171,8 +177,11 @@
     root.style.setProperty('--font-weight', String(weight));
     root.dataset.theme = settings.theme;
     root.dataset.ruby = settings.ruby;
-    for (const name of Object.keys(STEPS)) {
-      document.getElementById(name + '-value').textContent = STEPS[name].format(settings[name]);
+    for (const [name, { min, max, format }] of Object.entries(STEPS)) {
+      const output = document.getElementById(name + '-value');
+      output.textContent = format(settings[name]);
+      // 値の下の目盛り（最小から最大までのどのあたりか）
+      output.style.setProperty('--level', String((settings[name] - min) / (max - min)));
     }
     fontSelect.value = FONTS[settings.font] ? settings.font : DEFAULTS.font;
     populateWeightSelect();
@@ -217,9 +226,23 @@
   document.getElementById('reset-settings').addEventListener('click', () => changeSettings({ ...DEFAULTS }));
 
   settingsToggle.addEventListener('click', () => {
-    const open = settingsPanel.hidden;
-    settingsPanel.hidden = !open;
-    settingsToggle.setAttribute('aria-expanded', String(open));
+    if (settingsPanel.hidden) {
+      settingsPanel.hidden = false;
+      settingsToggle.setAttribute('aria-expanded', 'true');
+    } else {
+      closeSettings();
+    }
+  });
+  document.getElementById('settings-close').addEventListener('click', () => closeSettings(true));
+  // パネルの外を押したら閉じる（押したボタンなどの動作はそのまま行う）
+  document.addEventListener('click', (event) => {
+    if (settingsPanel.hidden || settingsPanel.contains(event.target) || settingsToggle.contains(event.target)) return;
+    closeSettings();
+  });
+  document.addEventListener('keydown', (event) => {
+    // ポップアップが開いているときの Esc は、ポップアップを閉じるのに任せる
+    if (event.key !== 'Escape' || settingsPanel.hidden || worksDialog.open || tocDialog.open) return;
+    closeSettings(true);
   });
 
   // ---- 本文の読み込みと描画 ----
@@ -1179,6 +1202,8 @@
       if (!(previous && previous.title === title && index - previous.index <= 2)) toc.push({ title, index, level });
       previous = { title, index };
     }
+    // 作品を開くまでは出さない（押せないボタンが壊れているように見えるため）
+    tocOpenButton.hidden = currentKey === null;
     tocOpenButton.disabled = toc.length === 0;
     tocOpenButton.textContent = toc.length ? '目次' : '目次なし';
     tocOpenButton.title = toc.length ? '' : 'この作品には見出しがありません';
@@ -1394,9 +1419,12 @@
   // 配色が「端末に合わせる」のとき、端末のライト・ダークの切り替えに追従する
   media('(prefers-color-scheme: dark)').addEventListener('change', updateThemeColor);
 
-  function closeSettings() {
+  // returnFocus：閉じるボタンや Esc で閉じたときは、キーボードで続けて操作できるよう「表示設定」へ戻す
+  function closeSettings(returnFocus = false) {
+    const hadFocus = settingsPanel.contains(document.activeElement);
     settingsPanel.hidden = true;
     settingsToggle.setAttribute('aria-expanded', 'false');
+    if (returnFocus || hadFocus) settingsToggle.focus();
   }
 
   const toastEl = document.getElementById('toast');
@@ -1415,10 +1443,7 @@
     const gaiji = event.target.closest('.gaiji[title]');
     if (gaiji) {
       showToast(gaiji.title);
-      return;
     }
-    // スマホ・タブレットでは、表示設定が本文を覆うので、本文を押したら閉じる
-    if (isHandheld() && !settingsPanel.hidden && !event.target.closest('a, button, input, select, label')) closeSettings();
   });
 
   // タブを閉じる・切り替える直前にも保存する

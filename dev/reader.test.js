@@ -71,10 +71,11 @@ class Element {
   querySelector() { return null; }
   querySelectorAll() { return []; }
   closest() { return this; }
+  contains(node) { return node === this || this.children.includes(node); }
   getBoundingClientRect() { return { height: 50 }; }
   showModal() { this.open = true; }
   close() { this.open = false; }
-  focus() {}
+  focus() { this.focused = (this.focused || 0) + 1; }
   click() { this.clicks = (this.clicks || 0) + 1; }
 }
 
@@ -89,7 +90,8 @@ function reader(api, extra = {}) {
     getElementById: element, createElement: extra.createElement || (() => new Element()), createDocumentFragment: () => new Element(),
     documentElement: Object.assign(new Element(), { scrollHeight: 2000 }),
     querySelector: () => ({ value: extra.order || 'rank' }), querySelectorAll: () => [],
-    fonts: { addEventListener() {}, ready: Promise.resolve() }, addEventListener() {},
+    fonts: { addEventListener() {}, ready: Promise.resolve() }, events: {}, activeElement: null,
+    addEventListener(name, fn) { this.events[name] = fn; },
   };
   const context = vm.createContext({
     document, Catalog: api, Library: {}, AozoraText: { prepare: (text) => ({ text, aozora: false }) }, console: { warn() {} },
@@ -102,14 +104,14 @@ function reader(api, extra = {}) {
   });
   // 起動時のI/Oだけを省き、画面のイベントハンドラを含めた本体を実行する。
   vm.runInContext(source('reader.js').replace('  init();', `
-    globalThis.api = { catalogNodes, renderWorksList, selectWork, importFiles, openText, renderHome, openWorks, loadAuthorShortcuts,
+    globalThis.api = { catalogNodes, renderWorksList, selectWork, importFiles, openText, renderHome, openWorks, loadAuthorShortcuts, applySettings, showHome,
       seedWorks: (works, shelf = []) => { siteWorks = works; books = shelf; },
       seed: (key, items) => { currentKey = key; paragraphs = items; },
       weightChoices: (weight) => { settings.weight = weight; populateWeightSelect(); return { options: [...weightSelect.children.map((o) => Number(o.value))], current: currentWeight() }; },
       state: () => ({ catalogPending, catalogFailed }) };
   `), context);
   element('works-dialog').open = true;
-  return { api: context.api, element, storage };
+  return { api: context.api, element, storage, document };
 }
 
 test('目録の失敗は再描画・入力・並び替えで再試行せず、再読み込みで復帰する', async () => {
@@ -420,6 +422,7 @@ test('本棚全件表示と削除：キャンセル・失敗は保持し、読�
   assert.ok(app.storage.has('aozora-reader:pos:lib:book8'));
   assert.equal(app.element('home').hidden, false);
   assert.equal(app.element('toc-open').textContent, '目次なし');
+  assert.equal(app.element('toc-open').hidden, true);
   assert.equal(app.element('home-resume-section').hidden, true);
   assert.equal(app.element('works-list').children.some((node) => node.className === 'shelf-item'), false);
 });
@@ -573,4 +576,61 @@ test('読み込み待ちの作品は、検索し直しても一覧の先頭に�
   app.api.seedWorks([], [{ id: 'saved', title, workId }]);
   app.api.renderWorksList();
   assert.equal(pendingHeading(app), undefined);
+});
+
+test('目次のボタンは作品を開くまで出さず、ホームに戻るとまた隠す', () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => ({ fields: [], kanaTypes: [], works: [] }) })));
+  app.api.showHome();
+  assert.equal(app.element('toc-open').hidden, true);
+  app.api.openText('site:work.txt', '作品', '本文');
+  assert.equal(app.element('toc-open').hidden, false);
+  assert.equal(app.element('toc-open').textContent, '目次なし'); // 見出しのない作品は、出したうえで押せない
+  app.api.showHome();
+  assert.equal(app.element('toc-open').hidden, true);
+});
+
+test('文字サイズ・行間・太さは数値ではなく言葉で示す', () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => ({}) })));
+  app.api.applySettings();
+  assert.equal(app.element('fontSize-value').textContent, '標準');
+  assert.equal(app.element('lineHeight-value').textContent, '標準');
+  app.element('settings').events.click({ target: { closest: () => ({ dataset: { step: 'fontSize', dir: '1' } }) } });
+  assert.equal(app.element('fontSize-value').textContent, 'やや大');
+  for (let i = 0; i < 4; i++) app.element('settings').events.click({ target: { closest: () => ({ dataset: { step: 'lineHeight', dir: '-1' } }) } });
+  assert.equal(app.element('lineHeight-value').textContent, '狭い');
+  const labels = [...app.element('weight-select').children.map((option) => option.textContent)];
+  assert.ok(labels.includes('標準'));
+  assert.ok(labels.every((label) => !/\d/.test(label)));
+});
+
+test('表示設定は「閉じる」・パネルの外・Esc で閉じ、中の操作では閉じない', () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => ({}) })));
+  const panel = app.element('settings');
+  const toggle = app.element('settings-toggle');
+  panel.hidden = true;
+  app.element('works-dialog').open = false;
+  const open = () => { toggle.events.click(); assert.equal(panel.hidden, false); };
+  open();
+  const inside = new Element();
+  panel.append(inside);
+  app.document.events.click({ target: inside });
+  assert.equal(panel.hidden, false);
+  app.document.events.click({ target: toggle }); // 「表示設定」自身はトグルの処理に任せる
+  assert.equal(panel.hidden, false);
+  app.document.events.click({ target: new Element() });
+  assert.equal(panel.hidden, true);
+  open();
+  app.element('settings-close').events.click();
+  assert.equal(panel.hidden, true);
+  assert.ok(toggle.focused); // キーボードで続けて操作できるよう「表示設定」へ戻す
+  open();
+  app.element('works-dialog').open = true; // ポップアップが開いていれば Esc はそちらに任せる
+  app.document.events.keydown({ key: 'Escape' });
+  assert.equal(panel.hidden, false);
+  app.element('works-dialog').open = false;
+  app.document.events.keydown({ key: 'Escape' });
+  assert.equal(panel.hidden, true);
+  open();
+  toggle.events.click();
+  assert.equal(panel.hidden, true);
 });

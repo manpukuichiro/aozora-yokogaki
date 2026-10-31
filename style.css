@@ -172,14 +172,27 @@ body {
 }
 
 .stepper output {
-  min-width: 4em;
+  min-width: 5.5em;
   padding: 0 4px;
+  /* 下端の細い線で、最小から最大までのどのあたりかを示す（--level は reader.js が 0〜1 で入れる） */
+  background: linear-gradient(var(--accent), var(--accent)) left bottom / calc(var(--level, 0.5) * 100%) 3px no-repeat;
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-variant-numeric: tabular-nums;
+}
+
+/* 表示設定の「閉じる」：グループの並びの下に、右寄せで置く */
+.settings-close-row {
+  display: flex;
+  justify-content: flex-end;
+  flex: 1 0 100%;
+}
+
+.settings-close {
+  min-width: 6em;
 }
 
 /* 目立たせない操作（設定の初期化など） */
@@ -977,9 +990,13 @@ button:disabled {
   font-size: 13px;
 }
 
-/* ボタンの下の説明は、見出しの下の説明（上に詰める）よりも離して置く */
-.home-actions + .home-note {
-  margin-top: 12px;
+/* 手元のファイルを開く：検索欄の下に、文字だけのボタンで控えめに置く */
+.home-file {
+  margin: 0.8em 0 0;
+}
+
+.home-file .text-button {
+  font-size: 14px;
 }
 
 /* 続きから読む */
@@ -1404,6 +1421,16 @@ main {
   main {
     padding-top: 1.5rem;
   }
+
+  /* スマホの最初の画面に「すぐに読める作品」が見えるよう、紹介の上下を詰める */
+  .home-hero {
+    padding: 0 0 1.5rem;
+  }
+
+  .home-lead {
+    margin-bottom: 1.2em;
+    line-height: 1.85;
+  }
 }
 
 /* キーボード操作と短い読み上げ通知 */
@@ -1537,6 +1564,20 @@ main {
     max-height: min(55dvh, 30rem);
     overflow-y: auto;
     overscroll-behavior: contain;
+    padding-bottom: 0;
+  }
+
+  /* パネルの中をスクロールしても「閉じる」が見えるよう、下端に留める */
+  .settings-close-row {
+    position: sticky;
+    bottom: 0;
+    padding: 8px 0 10px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .settings-close {
+    flex: 1;
   }
 }
 
