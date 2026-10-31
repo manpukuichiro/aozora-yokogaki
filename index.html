@@ -77,6 +77,13 @@
           </select>
         </div>
         <div class="setting">
+          <label class="setting-label" for="mode-select">読み方</label>
+          <select id="mode-select">
+            <option value="scroll">スクロール</option>
+            <option value="paged">ページ送り</option>
+          </select>
+        </div>
+        <div class="setting">
           <label class="setting-label" for="ruby-select">ルビ</label>
           <select id="ruby-select">
             <option value="on">表示</option>
@@ -292,6 +299,17 @@
       <p class="status">読み込み中…</p>
     </article>
   </main>
+
+  <!-- ページ送りのときだけ出す：ページ番号と、ツールバーを出している間の移動用のバー -->
+  <div class="pager" id="pager" hidden>
+    <div class="page-undo" id="page-undo" hidden>
+      <button type="button" id="page-undo-button">元のページに戻る</button>
+    </div>
+    <div class="page-seek-row">
+      <input type="range" id="page-seek" min="1" max="1" value="1" step="1" aria-label="ページを移動">
+    </div>
+    <p class="page-info"><span class="page-chapter" id="page-chapter"></span><span id="page-number"></span></p>
+  </div>
 
   <!-- 外字の説明など、短いお知らせを画面下に出す（タッチ操作ではマウスを重ねる説明が見られないため） -->
   <p class="toast" id="toast" role="status" hidden></p>

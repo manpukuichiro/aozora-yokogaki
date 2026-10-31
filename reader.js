@@ -9,7 +9,7 @@
   // 本棚（このブラウザに読み込んだ作品）の作品を表す値の接頭辞
   const LIB_PREFIX = 'lib:';
 
-  const DEFAULTS = { fontSize: 18, lineHeight: 1.9, measure: 36, font: 'mincho', weight: 400, ruby: 'on', theme: 'auto' };
+  const DEFAULTS = { fontSize: 18, lineHeight: 1.9, measure: 36, font: 'mincho', weight: 400, ruby: 'on', theme: 'auto', mode: 'scroll' };
   const STEPS = {
     fontSize: { step: 1, min: 12, max: 32, format: (v) => levelName(v - DEFAULTS.fontSize, ['小', 'やや小', '標準', 'やや大', '大', '特大']) },
     lineHeight: { step: 0.1, min: 1.3, max: 2.8, format: (v) => levelName(Math.round((v - DEFAULTS.lineHeight) * 10), ['狭い', 'やや狭い', '標準', 'やや広い', '広い', 'とても広い']) },
@@ -53,6 +53,7 @@
   const weightSelect = document.getElementById('weight-select');
   const themeSelect = document.getElementById('theme-select');
   const rubySelect = document.getElementById('ruby-select');
+  const modeSelect = document.getElementById('mode-select');
   const tocOpenButton = document.getElementById('toc-open');
   const tocDialog = document.getElementById('toc-dialog');
   const tocList = document.getElementById('toc-list');
@@ -187,7 +188,9 @@
     populateWeightSelect();
     themeSelect.value = settings.theme;
     rubySelect.value = settings.ruby;
+    modeSelect.value = settings.mode === 'paged' ? 'paged' : 'scroll';
     updateThemeColor();
+    updatePagedState();
   }
 
   // スマホのブラウザのアドレスバーなどの色を、ページの背景色（配色）に合わせる
@@ -223,6 +226,7 @@
   weightSelect.addEventListener('change', () => changeSettings({ weight: Number(weightSelect.value) }));
   themeSelect.addEventListener('change', () => changeSettings({ theme: themeSelect.value }));
   rubySelect.addEventListener('change', () => changeSettings({ ruby: rubySelect.value }));
+  modeSelect.addEventListener('change', () => changeSettings({ mode: modeSelect.value }));
   document.getElementById('reset-settings').addEventListener('click', () => changeSettings({ ...DEFAULTS }));
 
   settingsToggle.addEventListener('click', () => {
@@ -240,8 +244,12 @@
     closeSettings();
   });
   document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      pageKey(event);
+      return;
+    }
     // ポップアップが開いているときの Esc は、ポップアップを閉じるのに任せる
-    if (event.key !== 'Escape' || settingsPanel.hidden || worksDialog.open || tocDialog.open) return;
+    if (settingsPanel.hidden || worksDialog.open || tocDialog.open) return;
     closeSettings(true);
   });
 
@@ -303,8 +311,11 @@
     rememberRecent(key.startsWith('site:') ? key.slice(5) : key);
     document.title = title + ' — 横書き青空文庫ブラウザ版';
     const saved = loadJSON('pos:' + key);
+    hideUndo();
     if (saved) {
       restorePosition(saved);
+    } else if (paged) {
+      showPage(0);
     } else {
       window.scrollTo(0, 0);
     }
@@ -927,6 +938,7 @@
   function showReader() {
     homeEl.hidden = true;
     textEl.hidden = false;
+    updatePagedState();
   }
 
   function showHome(notice) {
@@ -937,6 +949,7 @@
     setCurrentWork(null);
     textEl.replaceChildren();
     textEl.hidden = true;
+    updatePagedState();
     paragraphs = [];
     watchRuby();
     buildToc();
@@ -1266,6 +1279,7 @@
 
   // 画面上端にある段落を二分探索で探す
   function firstVisibleIndex() {
+    if (paged) return firstIndexOnPage(page);
     const top = window.scrollY + headerOffset();
     let lo = 0;
     let hi = paragraphs.length - 1;
@@ -1281,6 +1295,7 @@
   // 段落番号と段落内の割合で持つので、文字サイズを変えても同じ箇所に戻れる
   function currentPosition() {
     if (!paragraphs.length) return null;
+    if (paged) return pagedPosition();
     const index = firstVisibleIndex();
     const p = paragraphs[index];
     const top = window.scrollY + headerOffset();
@@ -1292,10 +1307,15 @@
     const p = paragraphs[Math.min(position.index, paragraphs.length - 1)];
     if (!p) return;
     lastPosition = position;
+    if (paged) {
+      showPage(pageOfPosition(p, position.ratio || 0, geometry()));
+      return;
+    }
     window.scrollTo(0, p.offsetTop + p.offsetHeight * (position.ratio || 0) - headerOffset());
   }
 
   function progressPercent() {
+    if (paged) return pageCount > 1 ? Math.round((page / (pageCount - 1)) * 100) : 100;
     const max = document.documentElement.scrollHeight - window.innerHeight;
     return max > 0 ? Math.min(100, Math.round((window.scrollY / max) * 100)) : 100;
   }
@@ -1317,15 +1337,269 @@
 
   // 幅が変わると同じ scrollY でも別の段落になるので、直前の位置に戻してから保存させる
   // （画面回転・分割表示などで window の resize が来ない環境もあるため、本文の幅を直接見る）
-  let lastWidth = 0;
+  // ページ送りでは高さが変わってもページの区切りが変わる
+  let lastSize = '';
   new ResizeObserver(([entry]) => {
-    const width = Math.round(entry.contentRect.width);
-    if (width === lastWidth) return;
-    lastWidth = width;
+    const { width, height } = entry.contentRect;
+    const size = Math.round(width) + (paged ? 'x' + Math.round(height) : '');
+    if (size === lastSize) return;
+    lastSize = size;
     clearTimeout(saveTimer);
     relayoutRuby();
     if (lastPosition) restorePosition(lastPosition);
   }).observe(textEl);
+
+  // ---- ページ送り ----
+
+  // 本文を画面の高さの段（CSS の段組み）に流し、1 段を 1 ページとして横にずらして見せる。
+  // 読書位置はスクロールと同じ「段落番号と段落内の割合」で持つので、読み方を切り替えても続きから読める
+  const pagerEl = document.getElementById('pager');
+  const pageSeek = document.getElementById('page-seek');
+  const pageNumberEl = document.getElementById('page-number');
+  const pageChapterEl = document.getElementById('page-chapter');
+  const pageUndo = document.getElementById('page-undo');
+  const pageUndoButton = document.getElementById('page-undo-button');
+  let paged = false; // いまページ送りで表示しているか（作品を開いていて、設定がページ送りのとき）
+  let page = 0; // 0 始まり
+  let pageCount = 1;
+  let undoPage = null;
+  let undoTimer = 0;
+
+  function updatePagedState() {
+    const on = settings.mode === 'paged' && !textEl.hidden;
+    pagerEl.hidden = !on;
+    if (on === paged) return;
+    paged = on;
+    if (on) root.dataset.paged = 'on';
+    else delete root.dataset.paged;
+    textEl.classList.remove('page-turning');
+    textEl.style.transform = '';
+    page = 0;
+    hideUndo();
+    setToolbarHidden(false);
+    window.scrollTo(0, 0);
+  }
+
+  // 1 ページの幅は本文の箱の幅（左右の余白を含む）。端数を丸めると後ろのページほどずれるので、そのまま使う
+  function geometry() {
+    const rect = textEl.getBoundingClientRect();
+    return { left: rect.left || 0, stride: rect.width || 1 };
+  }
+
+  // 段落がかかっているページと、それぞれの高さ（ページをまたぐ段落は複数になる）
+  function fragments(p, g) {
+    const result = [];
+    for (const rect of p.getClientRects ? p.getClientRects() : [p.getBoundingClientRect()]) {
+      if (!rect.width && !rect.height) continue;
+      const first = Math.floor((rect.left - g.left) / g.stride);
+      const last = Math.floor((rect.right - 1 - g.left) / g.stride);
+      // 段ごとに分かれない環境では、またいだページで高さを等分したものとみなす
+      for (let column = first; column <= Math.max(first, last); column++) result.push({ column, height: rect.height });
+    }
+    return result;
+  }
+
+  function lastColumn(p, g) {
+    const parts = fragments(p, g);
+    return parts.length ? parts[parts.length - 1].column : -1;
+  }
+
+  // そのページに一部でもかかる最初の段落（二分探索）
+  function firstIndexOnPage(k, g = geometry()) {
+    let lo = 0;
+    let hi = paragraphs.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (lastColumn(paragraphs[mid], g) < k) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  function countPages(g) {
+    const last = textEl.lastElementChild;
+    const column = last ? lastColumn(last, g) : -1;
+    return Math.max(1, column + 1);
+  }
+
+  function pagedPosition() {
+    const g = geometry();
+    const index = firstIndexOnPage(page, g);
+    const parts = fragments(paragraphs[index], g);
+    const total = parts.reduce((sum, part) => sum + part.height, 0);
+    const before = parts.filter((part) => part.column < page).reduce((sum, part) => sum + part.height, 0);
+    return { index, ratio: total ? before / total : 0, percent: progressPercent() };
+  }
+
+  function pageOfPosition(p, ratio, g) {
+    const parts = fragments(p, g);
+    if (!parts.length) return page;
+    let rest = parts.reduce((sum, part) => sum + part.height, 0) * ratio + 0.5;
+    for (const part of parts) {
+      if (rest < part.height) return part.column;
+      rest -= part.height;
+    }
+    return parts[parts.length - 1].column;
+  }
+
+  // 前後のページのルビも先に配置しておく（画面の外は見張りでは見えないため）
+  function layoutRubyAround(k, g) {
+    if (settings.ruby !== 'on' || !rubyStale.size) return;
+    const from = firstIndexOnPage(k - 1, g);
+    const to = firstIndexOnPage(k + 2, g);
+    const ready = paragraphs.slice(from, to + 1).filter((p) => rubyStale.delete(p));
+    if (ready.length) AozoraText.layoutRuby(textEl, ready, g.stride);
+  }
+
+  function showPage(k, animate = false) {
+    const g = geometry();
+    pageCount = countPages(g);
+    page = Math.max(0, Math.min(pageCount - 1, k));
+    layoutRubyAround(page, g);
+    textEl.classList.toggle('page-turning', animate);
+    textEl.style.transform = page ? 'translateX(' + (-page * g.stride).toFixed(2) + 'px)' : '';
+    updatePager();
+    updateProgress();
+  }
+
+  function updatePager() {
+    pageSeek.max = String(pageCount);
+    pageSeek.value = String(page + 1);
+    pageSeek.setAttribute('aria-valuetext', 'ページ ' + (page + 1) + ' / ' + pageCount);
+    pageNumberEl.textContent = page + 1 + ' / ' + pageCount;
+    pageChapterEl.textContent = '';
+  }
+
+  // hideBars：タップ・スワイプ・キーでめくったときは、スマホではツールバーを隠して本文を広く見せる
+  function goToPage(k, { animate = false, undo = false, hideBars = false } = {}) {
+    const from = page;
+    showPage(k, animate);
+    if (page === from) return;
+    if (undo && Math.abs(page - from) > 1) offerUndo(from);
+    lastPosition = pagedPosition();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(savePosition, 400);
+    if (hideBars && isHandheld() && settingsPanel.hidden && !toolbar.contains(document.activeElement)) setToolbarHidden(true);
+  }
+
+  function turnPage(delta) {
+    goToPage(page + delta, { animate: true, hideBars: true });
+  }
+
+  // バーで大きく移ったあとは、しばらく「元のページに戻る」を出す
+  function offerUndo(from) {
+    undoPage = from;
+    pageUndoButton.textContent = '元のページ（' + (from + 1) + '）に戻る';
+    pageUndo.hidden = false;
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(hideUndo, 6000);
+  }
+
+  function hideUndo() {
+    clearTimeout(undoTimer);
+    undoPage = null;
+    pageUndo.hidden = true;
+  }
+
+  pageUndoButton.addEventListener('click', () => {
+    const target = undoPage;
+    hideUndo();
+    if (target !== null) goToPage(target);
+  });
+
+  // その段落を含む章の名前（目次がなければ空）。「二」だけでは分からないので、上の階層の見出しも添える
+  const HEADING_DEPTH = { 大: 0, 中: 1, 小: 2 };
+  function chapterAt(index) {
+    let path = [];
+    for (const item of toc) {
+      if (item.index > index) break;
+      path = [...path.filter((parent) => HEADING_DEPTH[parent.level] < HEADING_DEPTH[item.level]), item];
+    }
+    return path.map((item) => item.title).join(' › ');
+  }
+
+  // バーを動かしている間は、ページ番号と章の名前だけを変え、離したときにページを切り替える
+  pageSeek.addEventListener('input', () => {
+    const k = Number(pageSeek.value) - 1;
+    pageNumberEl.textContent = k + 1 + ' / ' + pageCount;
+    pageChapterEl.textContent = chapterAt(firstIndexOnPage(k));
+    pageSeek.setAttribute('aria-valuetext', 'ページ ' + (k + 1) + ' / ' + pageCount);
+  });
+  pageSeek.addEventListener('change', () => goToPage(Number(pageSeek.value) - 1, { undo: true }));
+
+  function pageKey(event) {
+    if (!paged || !currentKey || worksDialog.open || tocDialog.open || event.ctrlKey || event.altKey || event.metaKey) return;
+    const target = event.target && event.target.closest ? event.target : null;
+    if (target && target.closest('input, select, textarea, [contenteditable]')) return;
+    if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      goToPage(event.key === 'Home' ? 0 : pageCount - 1, { undo: true });
+      return;
+    }
+    // ボタンなどにフォーカスがあるときの空白キーは、そのボタンを押す操作に任せる
+    const onControl = target && target.closest('button, a, summary');
+    const delta = event.key === ' ' ? (onControl ? 0 : event.shiftKey ? -1 : 1)
+      : { ArrowRight: 1, ArrowDown: 1, PageDown: 1, ArrowLeft: -1, ArrowUp: -1, PageUp: -1 }[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    turnPage(delta);
+  }
+
+  // ページの右 3 割を押すと次、左 3 割で前のページ。真ん中はツールバー（とページ移動のバー）の出し入れ
+  function pageTap(event) {
+    if (!paged || !currentKey || !settingsPanel.hidden || Date.now() - swipedAt < 500) return;
+    if (event.target.closest('a, button, input, select, label, summary')) return;
+    const selection = typeof getSelection === 'function' ? getSelection() : null;
+    if (selection && !selection.isCollapsed) return; // 文字を選んだだけのときはめくらない
+    const area = mainEl.getBoundingClientRect();
+    const x = (event.clientX - (area.left || 0)) / (area.width || window.innerWidth);
+    if (x < 0.3) turnPage(-1);
+    else if (x > 0.7) turnPage(1);
+    else if (isHandheld()) setToolbarHidden(!toolbar.classList.contains('toolbar-hidden'));
+  }
+
+  const mainEl = document.getElementById('main');
+  // 続けてクリックしてめくると、ブラウザはダブルクリックとして単語を選んでしまうので、
+  // 2 回目以降の押し下げでは選択を始めない（ドラッグでの範囲選択はそのまま使える）
+  mainEl.addEventListener('mousedown', (event) => {
+    if (paged && currentKey && event.detail > 1 && !event.target.closest('a, button, input, select, label, summary')) event.preventDefault();
+  });
+  let touchStart = null;
+  let swipedAt = 0;
+  mainEl.addEventListener('touchstart', (event) => {
+    const touch = event.touches.length === 1 ? event.touches[0] : null;
+    touchStart = touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }, { passive: true });
+  mainEl.addEventListener('touchend', (event) => {
+    const start = touchStart;
+    touchStart = null;
+    // 拡大表示しているときの指の移動は、拡大した画面の中の移動に任せる
+    if (!paged || !currentKey || !start || (window.visualViewport && window.visualViewport.scale > 1.01)) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    swipedAt = Date.now();
+    turnPage(dx < 0 ? 1 : -1); // 左へはらうと次のページ
+  }, { passive: true });
+  // マウスのホイールやトラックパッドでもめくる。一続きの回転・スワイプは 1 ページとして扱う
+  let wheelAt = 0;
+  mainEl.addEventListener('wheel', (event) => {
+    if (!paged || !currentKey || event.ctrlKey) return;
+    event.preventDefault();
+    const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+    const now = Date.now();
+    const quiet = now - wheelAt > 250;
+    wheelAt = now;
+    if (quiet && Math.abs(delta) >= 4) turnPage(delta > 0 ? 1 : -1);
+  }, { passive: false });
+
+  // 幅の広い画面では、ページの上端をツールバーの下に合わせる（設定パネルの開閉では変えない）
+  const toolbarRow = toolbar.querySelector('.toolbar-row');
+  if (toolbarRow) {
+    new ResizeObserver(() => root.style.setProperty('--toolbar-height', toolbarRow.offsetHeight + 'px')).observe(toolbarRow);
+  }
+
 
   // ---- ルビの配置 ----
 
@@ -1346,7 +1620,7 @@
           rubyNearView.delete(entry.target);
         }
       }
-      if (ready.length && settings.ruby === 'on') AozoraText.layoutRuby(textEl, ready);
+      if (ready.length && settings.ruby === 'on') AozoraText.layoutRuby(textEl, ready, rubyStride());
     },
     { rootMargin: '100% 0px' },
   );
@@ -1368,11 +1642,20 @@
     for (const p of rubyParagraphs) rubyStale.add(p);
     const near = [...rubyNearView];
     for (const p of near) rubyStale.delete(p);
-    if (near.length) AozoraText.layoutRuby(textEl, near);
+    if (near.length) AozoraText.layoutRuby(textEl, near, rubyStride());
+  }
+
+  // ページ送りでは、ルビを 1 ページ（段）ごとに収める
+  function rubyStride() {
+    return paged ? geometry().stride : 0;
   }
 
   // フォントの読み込み後は字幅が変わる（端末のフォントでも、ブラウザが遅れて読み込むことがある）
-  document.fonts.addEventListener('loadingdone', relayoutRuby);
+  document.fonts.addEventListener('loadingdone', () => {
+    relayoutRuby();
+    // ページ送りでは字幅が変わるとページの区切りも変わるので、読んでいた箇所に戻す
+    if (paged && lastPosition) restorePosition(lastPosition);
+  });
 
   window.addEventListener('scroll', () => {
     if (!scrollQueued) {
@@ -1443,7 +1726,9 @@
     const gaiji = event.target.closest('.gaiji[title]');
     if (gaiji) {
       showToast(gaiji.title);
+      return;
     }
+    pageTap(event);
   });
 
   // タブを閉じる・切り替える直前にも保存する

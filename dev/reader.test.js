@@ -62,7 +62,11 @@ test('検索語がないうちは目録を読み込まない', () => {
 });
 
 class Element {
-  constructor() { this.children = []; this.events = {}; this.style = { setProperty() {} }; this.dataset = {}; this.value = ''; }
+  constructor() {
+    this.children = []; this.events = {}; this.style = { setProperty() {} }; this.dataset = {}; this.value = '';
+    const classes = new Set();
+    this.classList = { toggle: (name, on = !classes.has(name)) => (on ? classes.add(name) : classes.delete(name), on), add: (name) => classes.add(name), remove: (name) => classes.delete(name), contains: (name) => classes.has(name) };
+  }
   addEventListener(name, fn) { this.events[name] = fn; }
   append(...nodes) { this.children.push(...nodes); }
   replaceChildren(...nodes) { this.children = nodes; }
@@ -95,7 +99,7 @@ function reader(api, extra = {}) {
   };
   const context = vm.createContext({
     document, Catalog: api, Library: {}, AozoraText: { prepare: (text) => ({ text, aozora: false }) }, console: { warn() {} },
-    window: { scrollY: 300, innerHeight: 800, addEventListener() {}, scrollTo() {} },
+    window: { scrollY: 300, innerHeight: 800, innerWidth: 800, addEventListener() {}, scrollTo() {} },
     location: { href: 'http://localhost/' }, history: { replaceState() {} }, URL, URLSearchParams, TextEncoder,
     localStorage: { getItem: (key) => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) },
     ResizeObserver: class { observe() {} }, IntersectionObserver: class { observe() {} disconnect() {} },
@@ -104,7 +108,7 @@ function reader(api, extra = {}) {
   });
   // 起動時のI/Oだけを省き、画面のイベントハンドラを含めた本体を実行する。
   vm.runInContext(source('reader.js').replace('  init();', `
-    globalThis.api = { catalogNodes, renderWorksList, selectWork, importFiles, openText, renderHome, openWorks, loadAuthorShortcuts, applySettings, showHome,
+    globalThis.api = { catalogNodes, renderWorksList, selectWork, importFiles, openText, renderHome, openWorks, loadAuthorShortcuts, applySettings, showHome, restorePosition, currentPosition,
       seedWorks: (works, shelf = []) => { siteWorks = works; books = shelf; },
       seed: (key, items) => { currentKey = key; paragraphs = items; },
       weightChoices: (weight) => { settings.weight = weight; populateWeightSelect(); return { options: [...weightSelect.children.map((o) => Number(o.value))], current: currentWeight() }; },
@@ -633,4 +637,103 @@ test('表示設定は「閉じる」・パネルの外・Esc で閉じ、中の�
   open();
   toggle.events.click();
   assert.equal(panel.hidden, true);
+});
+
+// ページ送りの段組みを模した段落：幅 300 のページが横に並び、段落 5 は 2 ページ目と 3 ページ目にまたがる
+function pagedText(app) {
+  const columns = [[0], [0], [0], [1], [1], [1, 2], [2], [2], [3], [3]];
+  const paragraphs = columns.map((cols) => Object.assign(new Element(), {
+    getClientRects: () => cols.map((col) => ({ left: col * 300 + 24, right: col * 300 + 276, width: 252, height: 100 })),
+  }));
+  const text = app.element('text');
+  text.getBoundingClientRect = () => ({ left: 0, width: 300, height: 600 });
+  text.lastElementChild = paragraphs[paragraphs.length - 1];
+  app.element('works-dialog').open = false;
+  app.element('settings').hidden = true;
+  app.element('mode-select').value = 'paged';
+  app.element('mode-select').events.change();
+  app.api.seed('site:paged.txt', paragraphs);
+  return paragraphs;
+}
+const key = (name, extra = {}) => ({ key: name, target: { closest: () => null }, preventDefault() {}, ...extra });
+const pageNumber = (app) => app.element('page-number').textContent;
+
+test('ページ送り：読書位置は段落と割合のまま、ページをまたぐ段落の途中のページにも戻れる', () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => ({}) })));
+  pagedText(app);
+  assert.equal(app.element('pager').hidden, false);
+  app.api.restorePosition({ index: 5, ratio: 0.75 });
+  assert.equal(pageNumber(app), '3 / 4');
+  assert.deepEqual({ ...app.api.currentPosition() }, { index: 5, ratio: 0.5, percent: 67 });
+  app.api.restorePosition({ index: 5, ratio: 0 });
+  assert.equal(pageNumber(app), '2 / 4');
+  assert.equal(app.api.currentPosition().index, 3);
+  app.api.showHome();
+  assert.equal(app.element('pager').hidden, true);
+});
+
+test('ページ送り：キー・左右のタップでめくり、最初と最後より先へは進まない', () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => ({}) })));
+  pagedText(app);
+  app.api.restorePosition({ index: 0, ratio: 0 });
+  app.document.events.keydown(key('ArrowRight'));
+  assert.equal(pageNumber(app), '2 / 4');
+  app.document.events.keydown(key(' ', { shiftKey: true }));
+  assert.equal(pageNumber(app), '1 / 4');
+  app.document.events.keydown(key('ArrowLeft'));
+  assert.equal(pageNumber(app), '1 / 4');
+  app.document.events.keydown(key('End'));
+  assert.equal(pageNumber(app), '4 / 4');
+  app.document.events.keydown(key('PageDown'));
+  assert.equal(pageNumber(app), '4 / 4');
+  // 入力欄・選択肢で押したキーは、その操作に任せる
+  app.document.events.keydown(key('ArrowLeft', { target: { closest: (selector) => (selector.includes('select') ? {} : null) } }));
+  assert.equal(pageNumber(app), '4 / 4');
+  const main = app.element('main');
+  main.events.click({ clientX: 100, target: { closest: () => null } }); // 左 3 割
+  assert.equal(pageNumber(app), '3 / 4');
+  main.events.click({ clientX: 700, target: { closest: () => null } }); // 右 3 割
+  assert.equal(pageNumber(app), '4 / 4');
+  main.events.click({ clientX: 400, target: { closest: () => null } }); // 真ん中はめくらない
+  assert.equal(pageNumber(app), '4 / 4');
+  main.events.click({ clientX: 100, target: { closest: (selector) => (selector.includes('a') ? {} : null) } }); // リンクはめくらない
+  assert.equal(pageNumber(app), '4 / 4');
+});
+
+test('ページ送り：バーは動かしている間は番号だけを変え、離すと移って「元のページに戻る」を出す', () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => ({}) })));
+  pagedText(app);
+  app.api.restorePosition({ index: 9, ratio: 0 });
+  const seek = app.element('page-seek');
+  assert.equal(seek.max, '4');
+  assert.equal(seek.value, '4');
+  seek.value = '1';
+  seek.events.input();
+  assert.equal(pageNumber(app), '1 / 4');
+  assert.equal(app.api.currentPosition().index, 8); // まだ移っていない
+  seek.events.change();
+  assert.equal(app.api.currentPosition().index, 0);
+  assert.equal(app.element('page-undo').hidden, false);
+  assert.equal(app.element('page-undo-button').textContent, '元のページ（4）に戻る');
+  app.element('page-undo-button').events.click();
+  assert.equal(pageNumber(app), '4 / 4');
+  assert.equal(app.element('page-undo').hidden, true);
+  // 1 ページだけの移動（バーを矢印キーで動かしたときなど）では出さない
+  seek.value = '3';
+  seek.events.change();
+  assert.equal(pageNumber(app), '3 / 4');
+  assert.equal(app.element('page-undo').hidden, true);
+});
+
+test('ページ送り：続けてクリックしても単語を選ばず、1 回目の押し下げ（ドラッグでの選択）は止めない', () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => ({}) })));
+  pagedText(app);
+  const press = (detail) => {
+    let prevented = false;
+    app.element('main').events.mousedown({ detail, target: { closest: () => null }, preventDefault: () => { prevented = true; } });
+    return prevented;
+  };
+  assert.equal(press(1), false);
+  assert.equal(press(2), true);
+  assert.equal(press(3), true);
 });

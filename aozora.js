@@ -754,7 +754,8 @@ const AozoraText = (() => {
 
   // container：本文の段（ルビをはみ出させない範囲）。targets：配置する段落（省略時は全体）。
   // 長い作品では全部を一度に計算すると重いので、呼び出し側は画面の近くの段落だけを渡す
-  function layoutRuby(container, targets = [container]) {
+  // stride：ページ送り（段組み）のとき、1 ページ（段）の幅。段ごとに行を分け、その段の中に収める
+  function layoutRuby(container, targets = [container], stride = 0) {
     const rubies = targets.flatMap((target) => Array.from(target.querySelectorAll('ruby')));
     if (!rubies.length) return;
     const doc = container.ownerDocument;
@@ -774,7 +775,9 @@ const AozoraText = (() => {
       const key = p ? p : ruby;
       let byLine = lines.get(key);
       if (!byLine) lines.set(key, (byLine = new Map()));
-      const lineKey = Math.round(base.top);
+      // 段組みでは、別の段の同じ高さの行を同じ行として扱わない
+      const column = stride ? Math.floor((base.left - bounds.left) / stride) : 0;
+      const lineKey = column + ':' + Math.round(base.top);
       if (!byLine.has(lineKey)) byLine.set(lineKey, []);
       byLine.get(lineKey).push({
         ruby,
@@ -782,6 +785,7 @@ const AozoraText = (() => {
         baseLeft: base.left,
         desiredLeft: base.left + (base.width - width) / 2,
         width,
+        column,
         // rt は line-height: 1 なので、高さがそのままルビの文字サイズ
         halfSpace: rtRect.height * 0.5,
       });
@@ -804,7 +808,8 @@ const AozoraText = (() => {
             }
           }
         });
-        const resolved = resolveCollisions(placements, bounds.left, bounds.right, pixel);
+        const shift = placements[0].column * stride;
+        const resolved = resolveCollisions(placements, bounds.left + shift, bounds.right + shift, pixel);
         placements.forEach((placement, index) => writes.push([placement.rt, resolved[index] - placement.baseLeft]));
       }
     }

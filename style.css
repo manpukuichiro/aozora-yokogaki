@@ -1741,3 +1741,162 @@ select,
 summary {
   -webkit-tap-highlight-color: rgba(60, 90, 138, 0.12);
 }
+
+/* ---- ページ送り（reader.js が作品を開いているときに html へ data-paged を付ける） ---- */
+
+/* ページの外へはスクロールさせず、本文を画面の高さの段に流す */
+html[data-paged] body {
+  overflow: hidden;
+}
+
+/* 見える範囲を 1 ページの幅に合わせて中央に置き、前後のページは切り取る。
+   行の長さ（--measure）は本文の文字サイズの em なので、ここでも同じ文字サイズにする */
+html[data-paged] main {
+  --page-margin: max(24px, env(safe-area-inset-left), env(safe-area-inset-right));
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: min(100%, calc(var(--measure) + 2 * var(--page-margin)));
+  margin: 0 auto;
+  font-size: var(--font-size);
+  top: calc(var(--toolbar-height, 49px) + 16px);
+  /* 幅の広い画面では移動のバーを出したままにするので、その分もあける */
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  padding: 0;
+  overflow: hidden;
+  overflow: clip; /* フォーカスの移動などで中がずれないようにする */
+  touch-action: pinch-zoom; /* 拡大はできるが、指で中身を動かさない（スワイプはページめくりに使う） */
+}
+
+/* 1 段が 1 ページ。段と段の間の空き（左右の余白 2 つ分）を含めた幅ずつ、横にずらして見せる */
+html[data-paged] .text {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  padding: 0 var(--page-margin);
+  column-count: 1;
+  column-gap: calc(2 * var(--page-margin));
+  column-fill: auto;
+}
+
+html[data-paged] .text.page-turning {
+  transition: transform 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-paged] .text.page-turning {
+    transition: none;
+  }
+}
+
+/* スマホ・タブレットでは、ツールバーは本文の上に重ねて出し、めくると隠す */
+@media (max-width: 600px), (hover: none) {
+  html[data-paged] main {
+    top: calc(16px + env(safe-area-inset-top));
+    bottom: calc(32px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ページ番号と、ページを移動するバー */
+.pager {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom);
+  pointer-events: none;
+}
+
+.pager[hidden] {
+  display: none;
+}
+
+.pager > * {
+  pointer-events: auto;
+}
+
+.page-seek-row {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 6px max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right));
+  border-top: 1px solid var(--border);
+  background: var(--bar-bg);
+  backdrop-filter: blur(6px);
+}
+
+.page-seek-row input {
+  width: 100%;
+  max-width: 40rem;
+  min-height: 32px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* ツールバーを隠しているあいだは、バーも隠してページ番号だけにする */
+.toolbar.toolbar-hidden ~ .pager .page-seek-row {
+  display: none;
+}
+
+.page-info {
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  padding: 0 16px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.page-chapter {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.page-chapter:empty {
+  display: none;
+}
+
+.page-undo {
+  margin-bottom: 10px;
+}
+
+.page-undo[hidden] {
+  display: none;
+}
+
+.page-undo button {
+  min-height: 40px;
+  padding: 6px 18px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* ページ番号の上に、外字の説明などのお知らせを出す */
+html[data-paged] .toast {
+  bottom: calc(48px + env(safe-area-inset-bottom));
+}
+
+@media (pointer: coarse) {
+  .page-seek-row input {
+    min-height: 44px;
+  }
+}
