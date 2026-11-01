@@ -1002,7 +1002,7 @@
     shelfSection.hidden = books.length === 0;
     document.getElementById('home-shelf').replaceChildren(...books.slice(0, 8).map((book) => shelfItem(book, true)));
 
-    document.getElementById('home-popular').replaceChildren(...siteWorks.slice(0, 12).map((work) => homeWorkButton(work.file, work)));
+    document.getElementById('home-popular').replaceChildren(...siteWorks.slice(0, 30).map((work) => homeWorkButton(work.file, work)));
     document.getElementById('home-popular-title').closest('section').hidden = siteWorks.length === 0;
     document.getElementById('home-count').textContent = String(siteWorks.length);
   }
