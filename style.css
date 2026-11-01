@@ -1093,6 +1093,23 @@ button:disabled {
   font-size: 13px;
 }
 
+/* スマホでは「すぐに読める作品」を 2 列にして、一覧が縦に長くなりすぎないようにする */
+@media (max-width: 480px) {
+  #home-popular {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #home-popular .home-work {
+    padding: 8px 10px;
+  }
+
+  #home-popular .home-work-title,
+  #home-popular .home-work-author {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+
 .home-more {
   margin: 10px 0 0;
   text-align: right;
