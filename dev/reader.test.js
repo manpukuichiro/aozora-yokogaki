@@ -95,6 +95,7 @@ function reader(api, extra = {}) {
     documentElement: Object.assign(new Element(), { scrollHeight: 2000 }),
     querySelector: () => ({ value: extra.order || 'rank' }), querySelectorAll: () => [],
     fonts: { addEventListener() {}, ready: Promise.resolve() }, events: {}, activeElement: null,
+    body: Object.assign(new Element(), { closest: () => null }),
     addEventListener(name, fn) { this.events[name] = fn; },
   };
   const context = vm.createContext({
@@ -714,7 +715,6 @@ test('ページ送り：バーは動かしている間は番号だけを変え�
   seek.events.change();
   assert.equal(app.api.currentPosition().index, 0);
   assert.equal(app.element('page-undo').hidden, false);
-  assert.equal(app.element('page-undo-button').textContent, '元のページ（4）に戻る');
   app.element('page-undo-button').events.click();
   assert.equal(pageNumber(app), '4 / 4');
   assert.equal(app.element('page-undo').hidden, true);
@@ -730,10 +730,65 @@ test('ページ送り：続けてクリックしても単語を選ばず、1 回
   pagedText(app);
   const press = (detail) => {
     let prevented = false;
-    app.element('main').events.mousedown({ detail, target: { closest: () => null }, preventDefault: () => { prevented = true; } });
+    app.document.events.mousedown({ detail, target: app.document.body, preventDefault: () => { prevented = true; } });
     return prevented;
   };
   assert.equal(press(1), false);
   assert.equal(press(2), true);
   assert.equal(press(3), true);
+});
+
+test('折りたたみの開閉：開いたばかりでもページ数を数え直し、「元のページに戻る」は同じ箇所に戻る', () => {
+  let resized = null;
+  const app = reader(catalog(async () => ({ ok: true, json: async () => ({}) })), {
+    ResizeObserver: class { constructor(callback) { resized = callback; } observe() {} },
+  });
+  const paragraphs = pagedText(app);
+  const resize = (width) => resized([{ contentRect: { width, height: 600 } }]);
+  const moveTo = (index, column) => {
+    paragraphs[index].getClientRects = () => [{ left: column * 300 + 24, right: column * 300 + 276, width: 252, height: 100 }];
+  };
+  resize(252);
+  assert.equal(pageNumber(app), '1 / 4'); // まだめくっていなくても正しいページ数になる
+  app.element('text').lastElementChild = paragraphs[6];
+  resize(400);
+  assert.equal(pageNumber(app), '1 / 3');
+  app.element('text').lastElementChild = paragraphs[9];
+
+  app.api.restorePosition({ index: 9, ratio: 0 });
+  const seek = app.element('page-seek');
+  seek.value = '1';
+  seek.events.change();
+  assert.equal(app.element('page-undo').hidden, false);
+  // 開閉でページの区切りが変わる：もとの段落は 6 ページ目に移った
+  moveTo(8, 5);
+  moveTo(9, 5);
+  app.element('page-undo-button').events.click();
+  assert.equal(pageNumber(app), '6 / 6');
+  assert.equal(app.api.currentPosition().index, 8);
+});
+
+test('ページ送り：本文の左右の空白でも押して・はらってめくれ、ツールバーの上でははらってもめくらない', () => {
+  const app = reader(catalog(async () => ({ ok: true, json: async () => ({}) })));
+  pagedText(app);
+  app.api.restorePosition({ index: 3, ratio: 0 });
+  assert.equal(pageNumber(app), '2 / 4');
+  const { body, events } = app.document;
+  events.click({ clientX: 790, target: body });
+  assert.equal(pageNumber(app), '3 / 4');
+  events.click({ clientX: 10, target: body });
+  assert.equal(pageNumber(app), '2 / 4');
+  const swipe = (target, from, to) => {
+    events.touchstart({ target, touches: [{ clientX: from, clientY: 100 }] });
+    events.touchend({ changedTouches: [{ clientX: to, clientY: 100 }] });
+  };
+  swipe(body, 780, 600);
+  assert.equal(pageNumber(app), '3 / 4');
+  swipe(new Element(), 780, 600); // ツールバーや移動のバーの上（本文の外）
+  assert.equal(pageNumber(app), '3 / 4');
+  // 表示設定を開いているときの空白の押下は、閉じるだけでめくらない
+  app.element('settings').hidden = false;
+  events.click({ clientX: 790, target: body });
+  assert.equal(app.element('settings').hidden, true);
+  assert.equal(pageNumber(app), '3 / 4');
 });

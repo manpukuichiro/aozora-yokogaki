@@ -442,9 +442,12 @@ button:disabled {
 /* ---- 目次（ポップアップ） ---- */
 
 /* 目次・作品一覧に共通のポップアップ */
+/* 画面の中央に置くので、端の余白は上下・左右それぞれ大きいほうに合わせる（左右で違う画面でも隠れない） */
 .popup {
-  width: min(28rem, calc(100vw - 32px));
-  max-height: min(36rem, calc(100dvh - 32px));
+  --popup-gap-x: max(16px, env(safe-area-inset-left), env(safe-area-inset-right));
+  --popup-gap-y: max(16px, env(safe-area-inset-top), env(safe-area-inset-bottom));
+  width: min(28rem, calc(100vw - 2 * var(--popup-gap-x)));
+  max-height: min(36rem, calc(100dvh - 2 * var(--popup-gap-y)));
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -481,8 +484,8 @@ button:disabled {
 /* ---- 作品一覧 ---- */
 
 .works {
-  width: min(36rem, calc(100vw - 32px));
-  height: min(44rem, calc(100dvh - 32px));
+  width: min(36rem, calc(100vw - 2 * var(--popup-gap-x)));
+  height: min(44rem, calc(100dvh - 2 * var(--popup-gap-y)));
   max-height: none;
 }
 
@@ -1764,6 +1767,7 @@ summary {
 /* ページの外へはスクロールさせず、本文を画面の高さの段に流す */
 html[data-paged] body {
   overflow: hidden;
+  touch-action: pinch-zoom; /* 本文の左右の空白でのスワイプも、ページめくりに使う */
 }
 
 /* 見える範囲を 1 ページの幅に合わせて中央に置き、前後のページは切り取る。
@@ -1842,7 +1846,7 @@ html[data-paged] .text.page-turning {
   display: flex;
   justify-content: center;
   width: 100%;
-  padding: 6px max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right));
+  padding: 6px max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
   border-top: 1px solid var(--border);
   background: var(--bar-bg);
   backdrop-filter: blur(6px);

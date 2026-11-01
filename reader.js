@@ -240,6 +240,8 @@
   document.getElementById('settings-close').addEventListener('click', () => closeSettings(true));
   // パネルの外を押したら閉じる（押したボタンなどの動作はそのまま行う）
   document.addEventListener('click', (event) => {
+    // ページ送りでは、本文の左右の空白を押してもめくる（本文の上は main の処理に任せる）
+    if (event.target === document.body || event.target === root) pageTap(event);
     if (settingsPanel.hidden || settingsPanel.contains(event.target) || settingsToggle.contains(event.target)) return;
     closeSettings();
   });
@@ -1353,6 +1355,7 @@
     clearTimeout(saveTimer);
     relayoutRuby();
     if (lastPosition) restorePosition(lastPosition);
+    else if (paged) showPage(page); // 開いたばかりでまだ位置がなくても、ページ数は数え直す
   }).observe(textEl);
 
   // ---- ページ送り ----
@@ -1368,7 +1371,7 @@
   let paged = false; // いまページ送りで表示しているか（作品を開いていて、設定がページ送りのとき）
   let page = 0; // 0 始まり
   let pageCount = 1;
-  let undoPage = null;
+  let undoPosition = null; // ページ番号は開閉や回転で変わるので、読書位置で覚える
   let undoTimer = 0;
 
   function updatePagedState() {
@@ -1479,9 +1482,10 @@
   // hideBars：タップ・スワイプ・キーでめくったときは、スマホではツールバーを隠して本文を広く見せる
   function goToPage(k, { animate = false, undo = false, hideBars = false } = {}) {
     const from = page;
+    const before = undo ? currentPosition() : null;
     showPage(k, animate);
     if (page === from) return;
-    if (undo && Math.abs(page - from) > 1) offerUndo(from);
+    if (before && Math.abs(page - from) > 1) offerUndo(before);
     lastPosition = pagedPosition();
     clearTimeout(saveTimer);
     saveTimer = setTimeout(savePosition, 400);
@@ -1493,9 +1497,8 @@
   }
 
   // バーで大きく移ったあとは、しばらく「元のページに戻る」を出す
-  function offerUndo(from) {
-    undoPage = from;
-    pageUndoButton.textContent = '元のページ（' + (from + 1) + '）に戻る';
+  function offerUndo(position) {
+    undoPosition = position;
     pageUndo.hidden = false;
     clearTimeout(undoTimer);
     undoTimer = setTimeout(hideUndo, 6000);
@@ -1503,14 +1506,17 @@
 
   function hideUndo() {
     clearTimeout(undoTimer);
-    undoPage = null;
+    undoPosition = null;
     pageUndo.hidden = true;
   }
 
   pageUndoButton.addEventListener('click', () => {
-    const target = undoPage;
+    const position = undoPosition;
     hideUndo();
-    if (target !== null) goToPage(target);
+    if (!position) return;
+    restorePosition(position);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(savePosition, 400);
   });
 
   // その段落を含む章の名前（目次がなければ空）。「二」だけでは分からないので、上の階層の見出しも添える
@@ -1565,18 +1571,20 @@
   }
 
   const mainEl = document.getElementById('main');
+  // 本文と、その左右の空白（ツールバーやポップアップの上は含まない）
+  const inPageArea = (target) => target === document.body || target === root || mainEl.contains(target);
   // 続けてクリックしてめくると、ブラウザはダブルクリックとして単語を選んでしまうので、
   // 2 回目以降の押し下げでは選択を始めない（ドラッグでの範囲選択はそのまま使える）
-  mainEl.addEventListener('mousedown', (event) => {
-    if (paged && currentKey && event.detail > 1 && !event.target.closest('a, button, input, select, label, summary')) event.preventDefault();
+  document.addEventListener('mousedown', (event) => {
+    if (paged && currentKey && event.detail > 1 && inPageArea(event.target) && !event.target.closest('a, button, input, select, label, summary')) event.preventDefault();
   });
   let touchStart = null;
   let swipedAt = 0;
-  mainEl.addEventListener('touchstart', (event) => {
-    const touch = event.touches.length === 1 ? event.touches[0] : null;
+  document.addEventListener('touchstart', (event) => {
+    const touch = event.touches.length === 1 && inPageArea(event.target) ? event.touches[0] : null;
     touchStart = touch ? { x: touch.clientX, y: touch.clientY } : null;
   }, { passive: true });
-  mainEl.addEventListener('touchend', (event) => {
+  document.addEventListener('touchend', (event) => {
     const start = touchStart;
     touchStart = null;
     // 拡大表示しているときの指の移動は、拡大した画面の中の移動に任せる
